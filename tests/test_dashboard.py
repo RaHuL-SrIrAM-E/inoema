@@ -55,5 +55,5 @@ def test_developer_integration_mcp_trace_button_after_run():
     mcp_button.click().run(timeout=30)
     assert not at.exception
 
-    expander_labels = [e.label for e in at.expander]
-    assert any("Agent discovers available INOEMA tools" in label for label in expander_labels)
+    markdown_text = "\n".join(m.value for m in at.markdown)
+    assert "Agent discovers available INOEMA tools" in markdown_text

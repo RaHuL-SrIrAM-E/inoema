@@ -23,7 +23,17 @@ from typing import Optional
 
 import streamlit as st
 
-from dashboard.components import BORDER, CORAL, MUTED, PRIMARY_TEXT, SURFACE, TEAL, minutes_to_clock, shortfall_trial_count
+from dashboard.components import (
+    BORDER,
+    CORAL,
+    MUTED,
+    PRIMARY_TEXT,
+    SURFACE,
+    TEAL,
+    minutes_to_clock,
+    render_kicker,
+    shortfall_trial_count,
+)
 
 ILLUSTRATIVE_RESPONSE = {
     "simulation_id": "sim-illustrative-0001",
@@ -81,52 +91,66 @@ def _label(is_real: bool) -> str:
 def _render_label(is_real: bool) -> None:
     color = TEAL if is_real else CORAL
     st.markdown(
-        f"<span style='color:{color}; font-weight:600; font-size:0.78rem; "
-        f"text-transform:uppercase; letter-spacing:0.03em;'>{_label(is_real)}</span>",
+        f"<span class='inoema-pill' style='border-color:{color}33;'>"
+        f"<span class='inoema-dot' style='background:{color}; box-shadow:0 0 0 3px {color}26;'></span>"
+        f"<span style='color:{color}; font-weight:700; font-size:0.74rem; "
+        f"text-transform:uppercase; letter-spacing:0.04em;'>{_label(is_real)}</span></span>",
         unsafe_allow_html=True,
     )
+
+
+_METHOD_BADGE = (
+    f"<span style='background:{TEAL}; color:#FFFFFF; font-weight:700; font-size:0.72rem; "
+    "padding:0.2rem 0.55rem; border-radius:6px; letter-spacing:0.03em;'>POST</span>"
+)
 
 
 # --- 1. REST API panel ------------------------------------------------------
 
 def render_rest_api_panel(demo: Optional[dict]) -> None:
+    render_kicker("Integration · HTTP")
     st.markdown("#### REST API")
     st.caption(
         "Prototype / mock interface — no server is actually running. This "
         "shows the contract INOEMA would expose to external agents."
     )
 
-    st.markdown("**POST** `/api/v1/simulations`")
+    with st.container(border=True):
+        st.markdown(
+            f"{_METHOD_BADGE}&nbsp;&nbsp;<code>/api/v1/simulations</code>",
+            unsafe_allow_html=True,
+        )
+        st.write("")
 
-    example_request = {
-        "scenario": "payment_release",
-        "batch_size": 2000,
-        "release_schedule": [{"time": "18:30", "count": 2000}],
-        "trials": 200,
-    }
-    st.markdown("Example request")
-    st.code(json.dumps(example_request, indent=2), language="json")
+        example_request = {
+            "scenario": "payment_release",
+            "batch_size": 2000,
+            "release_schedule": [{"time": "18:30", "count": 2000}],
+            "trials": 200,
+        }
+        st.markdown("Example request")
+        st.code(json.dumps(example_request, indent=2), language="json")
 
-    curl_cmd = (
-        "curl -X POST https://api.inoema.example/v1/simulations \\\n"
-        '  -H "Content-Type: application/json" \\\n'
-        f"  -d '{json.dumps(example_request)}'"
-    )
-    st.markdown("curl")
-    st.code(curl_cmd, language="bash")
+        curl_cmd = (
+            "curl -X POST https://api.inoema.example/v1/simulations \\\n"
+            '  -H "Content-Type: application/json" \\\n'
+            f"  -d '{json.dumps(example_request)}'"
+        )
+        st.markdown("curl")
+        st.code(curl_cmd, language="bash")
 
-    result = demo.get("result") if demo else None
-    comparison = demo.get("comparison") if demo else None
+        result = demo.get("result") if demo else None
+        comparison = demo.get("comparison") if demo else None
 
-    st.markdown("Example response")
-    if result is not None:
-        response = _simulation_response(result, comparison)
-        is_real = True
-    else:
-        response = dict(ILLUSTRATIVE_RESPONSE)
-        is_real = False
-    _render_label(is_real)
-    st.code(json.dumps(response, indent=2), language="json")
+        st.markdown("Example response")
+        if result is not None:
+            response = _simulation_response(result, comparison)
+            is_real = True
+        else:
+            response = dict(ILLUSTRATIVE_RESPONSE)
+            is_real = False
+        _render_label(is_real)
+        st.code(json.dumps(response, indent=2), language="json")
 
 
 # --- 2. MCP tool catalogue ---------------------------------------------------
@@ -238,26 +262,38 @@ _TOOL_DEFS = [
 ]
 
 
+_TOOL_ACCENTS = [TEAL, CORAL, TEAL, CORAL]
+
+
 def render_mcp_catalogue(demo: Optional[dict]) -> None:
+    render_kicker("Integration · MCP", color=CORAL)
     st.markdown("#### MCP Tool Catalogue")
     st.caption(
         "Prototype tool definitions INOEMA would expose over an MCP adapter. "
         "No live MCP server is running."
     )
-    for name, description, input_example, builder in _TOOL_DEFS:
-        with st.expander(name, expanded=False):
-            st.write(description)
-            st.markdown("Input arguments (representative)")
-            st.code(json.dumps(input_example, indent=2), language="json")
-            response, is_real = builder(demo)
-            st.markdown("Example response")
-            _render_label(is_real)
-            st.code(json.dumps(response, indent=2), language="json")
+    for (name, description, input_example, builder), accent in zip(_TOOL_DEFS, _TOOL_ACCENTS):
+        with st.container(border=True):
+            st.markdown(
+                f"<div style='border-left:3px solid {accent}; padding-left:0.6rem;'>"
+                f"<code style='font-size:1rem; font-weight:700; color:{PRIMARY_TEXT};'>{name}</code>"
+                f"<div style='color:{MUTED}; font-size:0.85rem; margin-top:0.1rem;'>{description}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            with st.expander("Arguments & response", expanded=False):
+                st.markdown("Input arguments (representative)")
+                st.code(json.dumps(input_example, indent=2), language="json")
+                response, is_real = builder(demo)
+                st.markdown("Example response")
+                _render_label(is_real)
+                st.code(json.dumps(response, indent=2), language="json")
 
 
 # --- 3. MCP invocation trace -------------------------------------------------
 
 def render_mcp_trace(demo: Optional[dict]) -> None:
+    render_kicker("Integration · Trace", color=CORAL)
     st.markdown("#### MCP Invocation Trace")
     st.caption(
         "Simulated MCP interaction — no real external MCP client is connected. "
@@ -349,14 +385,21 @@ def render_mcp_trace(demo: Optional[dict]) -> None:
     steps.append(("7. Agent receives approval information", None, approval_info, real_approval))
 
     for title, args, response, is_real in steps:
-        with st.expander(title, expanded=False):
-            _render_label(is_real)
-            if args is not None:
-                st.markdown("Arguments")
-                st.code(json.dumps(args, indent=2), language="json")
-            if response is not None:
-                st.markdown("Response")
-                st.code(json.dumps(response, indent=2), language="json")
+        accent = TEAL if is_real else CORAL
+        with st.container(border=True):
+            st.markdown(
+                f"<div style='border-left:3px solid {accent}; padding-left:0.6rem; "
+                f"font-weight:600; color:{PRIMARY_TEXT};'>{title}</div>",
+                unsafe_allow_html=True,
+            )
+            with st.expander("Details", expanded=False):
+                _render_label(is_real)
+                if args is not None:
+                    st.markdown("Arguments")
+                    st.code(json.dumps(args, indent=2), language="json")
+                if response is not None:
+                    st.markdown("Response")
+                    st.code(json.dumps(response, indent=2), language="json")
 
 
 # --- 4. Architecture diagram -------------------------------------------------
@@ -373,18 +416,31 @@ _ARCH_STAGES = [
 
 
 def render_architecture_diagram() -> None:
+    render_kicker("Blueprint")
     st.markdown("#### Architecture")
     st.caption("How an external autonomous agent integrates with INOEMA.")
 
-    boxes = [
-        f"<div style='border:1px solid {BORDER}; border-radius:4px; background:{SURFACE}; "
-        f"padding:0.55rem 0.6rem; font-size:0.76rem; color:{PRIMARY_TEXT}; text-align:center; "
-        f"flex:1; min-width:120px;'>{stage}</div>"
-        for stage in _ARCH_STAGES
-    ]
-    arrow = f"<div style='color:{MUTED}; padding:0 0.35rem; display:flex; align-items:center; font-size:0.9rem;'>&rarr;</div>"
+    accents = [TEAL, TEAL, CORAL, TEAL, TEAL, CORAL, TEAL]
+    boxes = []
+    for i, (stage, accent) in enumerate(zip(_ARCH_STAGES, accents), start=1):
+        boxes.append(
+            "<div style='display:flex; flex-direction:column; align-items:center; "
+            "flex:1; min-width:128px;'>"
+            f"<div style='width:26px; height:26px; border-radius:50%; background:{accent}; "
+            "color:#FFFFFF; font-size:0.72rem; font-weight:700; display:flex; "
+            f"align-items:center; justify-content:center; margin-bottom:0.4rem; "
+            f"box-shadow:0 2px 6px {accent}4D;'>{i}</div>"
+            f"<div style='border:1px solid {BORDER}; border-radius:10px; background:{SURFACE}; "
+            f"padding:0.6rem 0.65rem; font-size:0.76rem; font-weight:600; color:{PRIMARY_TEXT}; "
+            "text-align:center; width:100%; box-shadow:0 1px 2px rgba(16,44,43,0.04);'>"
+            f"{stage}</div></div>"
+        )
+    arrow = (
+        f"<div style='color:{BORDER}; padding:0 0.25rem; display:flex; align-items:center; "
+        "font-size:1.1rem; margin-top:1.1rem;'>&#8211;&#8211;&#9656;</div>"
+    )
     row = (
-        "<div style='display:flex; align-items:stretch; gap:0.15rem; overflow-x:auto; padding-bottom:0.3rem;'>"
+        "<div style='display:flex; align-items:flex-start; gap:0.1rem; overflow-x:auto; padding-bottom:0.4rem;'>"
         + arrow.join(boxes)
         + "</div>"
     )
@@ -394,6 +450,7 @@ def render_architecture_diagram() -> None:
 # --- Top-level section --------------------------------------------------------
 
 def render_developer_integration(demo: Optional[dict]) -> None:
+    render_kicker("For External Agents")
     st.subheader("Developer Integration")
     st.caption(
         "Prototype interface demonstrating how an external autonomous agent "

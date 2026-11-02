@@ -37,11 +37,6 @@ TEXT = PRIMARY_TEXT  # kept for readability at call sites below
 RISK_COLORS = {"LOW": TEAL, "MEDIUM": CORAL, "HIGH": CORAL, "UNKNOWN": CORAL}
 DECISION_COLORS = {"PROCEED": TEAL, "ADJUST": CORAL, "ABSTAIN": CORAL}
 
-SYNTHETIC_NOTICE = (
-    "SYNTHETIC / MOCKED ENVIRONMENT — no real PayPal, bank, or ledger "
-    "system is contacted anywhere in this demonstration."
-)
-
 PLOTLY_LAYOUT = dict(
     template="plotly_white",
     paper_bgcolor=BG,
@@ -54,56 +49,187 @@ PLOTLY_LAYOUT = dict(
 
 
 def inject_base_style() -> None:
-    """Small, targeted CSS overrides -- restrained cards, no glow/gradients,
-    muted secondary text, a teal (not blue) primary button. Applied once."""
+    """Targeted CSS overrides: soft elevation, a teal gradient primary
+    button, a numbered-stepper timeline, section "kickers", and polished
+    code/expander/container treatments -- all within the INOEMA palette
+    (no electric blue, no emoji, no AI-chatbot styling)."""
     st.markdown(
         f"""
         <style>
+          html, body, [class*="css"] {{
+              font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+          }}
+
+          /* Metric cards -------------------------------------------------- */
           div[data-testid="stMetric"] {{
               background: {SURFACE};
               border: 1px solid {BORDER};
-              border-radius: 4px;
-              padding: 0.55rem 0.75rem;
+              border-radius: 10px;
+              padding: 0.7rem 0.85rem 0.6rem 0.85rem;
+              box-shadow: 0 1px 2px rgba(16, 44, 43, 0.04);
+              transition: box-shadow 0.15s ease, transform 0.15s ease;
+          }}
+          div[data-testid="stMetric"]:hover {{
+              box-shadow: 0 4px 14px rgba(16, 44, 43, 0.08);
+              transform: translateY(-1px);
           }}
           div[data-testid="stMetricValue"] {{
-              font-size: 1.35rem;
-              font-weight: 600;
+              font-size: 1.45rem;
+              font-weight: 650;
               color: {PRIMARY_TEXT};
+              letter-spacing: -0.01em;
           }}
           div[data-testid="stMetricLabel"] {{
               color: {MUTED};
-              font-size: 0.75rem;
+              font-size: 0.72rem;
               text-transform: uppercase;
-              letter-spacing: 0.03em;
-          }}
-          .stButton > button[kind="primary"] {{
-              background-color: {TEAL};
-              border: 1px solid {TEAL};
-              color: #06211D;
-              border-radius: 4px;
+              letter-spacing: 0.05em;
               font-weight: 600;
-              box-shadow: none;
+          }}
+
+          /* Bordered containers used as cards ------------------------------ */
+          div[data-testid="stVerticalBlockBorderWrapper"] {{
+              border-radius: 12px !important;
+              border-color: {BORDER} !important;
+              box-shadow: 0 1px 3px rgba(16, 44, 43, 0.05);
+          }}
+
+          /* Buttons --------------------------------------------------------- */
+          .stButton > button[kind="primary"] {{
+              background: linear-gradient(135deg, {TEAL} 0%, #209483 100%);
+              border: 1px solid #1E8A7A;
+              color: #FFFFFF;
+              border-radius: 8px;
+              font-weight: 650;
+              letter-spacing: 0.01em;
+              box-shadow: 0 2px 8px rgba(44, 182, 164, 0.28);
+              transition: box-shadow 0.15s ease, transform 0.15s ease;
           }}
           .stButton > button[kind="primary"]:hover {{
-              background-color: #26A294;
-              border-color: #26A294;
-              color: #06211D;
+              box-shadow: 0 4px 14px rgba(44, 182, 164, 0.4);
+              transform: translateY(-1px);
           }}
           .stButton > button[kind="secondary"] {{
-              border-radius: 4px;
+              border-radius: 8px;
               border-color: {BORDER};
               color: {PRIMARY_TEXT};
+              transition: border-color 0.15s ease;
           }}
+          .stButton > button[kind="secondary"]:hover {{
+              border-color: {TEAL};
+              color: {TEAL};
+          }}
+
           hr {{ border-color: {BORDER}; }}
+
+          /* Expanders ---------------------------------------------------- */
           [data-testid="stExpander"] {{
               border: 1px solid {BORDER};
-              border-radius: 4px;
+              border-radius: 10px;
+              box-shadow: 0 1px 2px rgba(16, 44, 43, 0.03);
           }}
-          code {{
+          [data-testid="stExpander"] summary:hover {{
+              color: {TEAL};
+          }}
+
+          /* Code blocks -- quiet "console" treatment ----------------------- */
+          [data-testid="stCodeBlock"] pre {{
+              border-radius: 10px !important;
+              border: 1px solid {BORDER} !important;
+              box-shadow: 0 1px 2px rgba(16, 44, 43, 0.04);
+          }}
+          code {{ color: {PRIMARY_TEXT}; }}
+
+          /* Section kicker label ------------------------------------------- */
+          .inoema-kicker {{
+              display: inline-flex;
+              align-items: center;
+              gap: 0.4rem;
+              font-size: 0.72rem;
+              font-weight: 700;
+              letter-spacing: 0.09em;
+              text-transform: uppercase;
+              color: var(--kicker-color, {TEAL});
+              margin-bottom: 0.15rem;
+          }}
+          .inoema-kicker::before {{
+              content: "";
+              width: 7px;
+              height: 7px;
+              border-radius: 50%;
+              background: var(--kicker-color, {TEAL});
+              display: inline-block;
+          }}
+          .inoema-rule {{
+              height: 2px;
+              width: 46px;
+              border-radius: 2px;
+              background: linear-gradient(90deg, {TEAL}, {CORAL});
+              margin: 0.3rem 0 0.9rem 0;
+          }}
+
+          /* Pill badges ------------------------------------------------------ */
+          .inoema-pill {{
+              display: inline-flex;
+              align-items: center;
+              gap: 0.35rem;
+              padding: 0.28rem 0.7rem;
+              border-radius: 999px;
+              background: {SURFACE};
+              border: 1px solid {BORDER};
+              font-size: 0.78rem;
               color: {PRIMARY_TEXT};
           }}
+          .inoema-dot {{
+              width: 7px; height: 7px; border-radius: 50%;
+              background: {TEAL};
+              box-shadow: 0 0 0 3px rgba(44,182,164,0.18);
+          }}
+
+          /* Stepper timeline -------------------------------------------------- */
+          .inoema-stepper {{ display:flex; align-items:flex-start; width:100%; overflow-x:auto; padding: 0.4rem 0 0.2rem 0; }}
+          .inoema-step {{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:92px; position:relative; }}
+          .inoema-step-circle {{
+              width: 30px; height: 30px; border-radius: 50%;
+              display:flex; align-items:center; justify-content:center;
+              font-size: 0.75rem; font-weight:700;
+              border: 2px solid {BORDER};
+              background: #FFFFFF;
+              color: {MUTED};
+              z-index: 2;
+          }}
+          .inoema-step-circle.done {{
+              background: {TEAL}; border-color: {TEAL}; color: #FFFFFF;
+              box-shadow: 0 0 0 4px rgba(44,182,164,0.15);
+          }}
+          .inoema-step-circle.blocked {{
+              background: #FFFFFF; border-color: {CORAL}; color: {CORAL};
+          }}
+          .inoema-step-line {{
+              position:absolute; top:15px; left:-50%; width:100%; height:2px;
+              background: {BORDER}; z-index:1;
+          }}
+          .inoema-step-line.done {{ background: {TEAL}; }}
+          .inoema-step:first-child .inoema-step-line {{ display:none; }}
+          .inoema-step-label {{
+              margin-top: 0.4rem; font-size: 0.68rem; font-weight:700;
+              letter-spacing: 0.04em; text-transform:uppercase; text-align:center;
+              color: {PRIMARY_TEXT};
+          }}
+          .inoema-step-label.pending {{ color: {MUTED}; }}
+          .inoema-step-label.blocked {{ color: {CORAL}; }}
         </style>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_kicker(label: str, color: str = TEAL) -> None:
+    """A small colored label + gradient rule rendered above a subheader --
+    purely decorative, never changes the subheader text itself."""
+    st.markdown(
+        f"<div class='inoema-kicker' style='--kicker-color:{color};'>{label}</div>"
+        f"<div class='inoema-rule'></div>",
         unsafe_allow_html=True,
     )
 
@@ -125,51 +251,40 @@ def render_header() -> None:
     inject_base_style()
     st.markdown(
         f"""
-        <div style="padding: 0.4rem 0 1rem 0; border-bottom: 1px solid {BORDER}; margin-bottom: 1rem;">
-          <div style="display:flex; align-items:baseline; gap: 0.75rem;">
-            <span style="font-size: 1.9rem; font-weight: 700; letter-spacing: 0.03em; color:{PRIMARY_TEXT};">INOEMA</span>
-            <span style="font-size: 0.92rem; color:{MUTED};">Simulation Infrastructure for Autonomous Systems</span>
+        <div style="padding: 0.5rem 0 1.1rem 0; margin-bottom: 1.1rem;
+                    border-bottom: 1px solid {BORDER};
+                    background: linear-gradient(180deg, {SURFACE} 0%, rgba(255,255,255,0) 100%);">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem;">
+            <div style="display:flex; align-items:baseline; gap: 0.85rem;">
+              <span style="font-size: 2.1rem; font-weight: 800; letter-spacing: 0.01em; color:{PRIMARY_TEXT};">INOEMA</span>
+              <span style="font-size: 0.95rem; color:{MUTED};">Simulation Infrastructure for Autonomous Systems</span>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+              <span class="inoema-pill"><span class="inoema-dot"></span>Engine&nbsp;Online</span>
+              <span class="inoema-pill"><span class="inoema-dot"></span>Mode&nbsp;Mocked</span>
+            </div>
           </div>
+          <div style="height:3px; width:72px; margin-top:0.75rem; border-radius:2px;
+                      background: linear-gradient(90deg, {TEAL}, {CORAL});"></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f"""
-        <div style="border-left: 3px solid {CORAL}; background:{SURFACE}; padding: 0.5rem 0.9rem;
-                    border-radius: 2px; margin-bottom: 0.9rem; color:{PRIMARY_TEXT}; font-size:0.88rem;">
-          <strong>{SYNTHETIC_NOTICE}</strong>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    cols = st.columns([1, 1, 6])
-    with cols[0]:
-        st.markdown(
-            f"<span style='color:{TEAL};'>&#9679;</span>&nbsp;<span style='color:{MUTED};'>Engine</span> "
-            f"<span style='color:{PRIMARY_TEXT};'>Online</span>",
-            unsafe_allow_html=True,
-        )
-    with cols[1]:
-        st.markdown(
-            f"<span style='color:{TEAL};'>&#9679;</span>&nbsp;<span style='color:{MUTED};'>Mode</span> "
-            f"<span style='color:{PRIMARY_TEXT};'>Mocked</span>",
-            unsafe_allow_html=True,
-        )
 
 
 def render_agent_control(result: AgentRunResult, batch_size: int) -> None:
+    render_kicker("Step 01 · Agent")
     st.subheader("Agent Control")
     initial_action = result.trace[0].action
 
-    cols = st.columns(4)
-    cols[0].metric("Objective", "Release batch safely")
-    cols[1].metric("Batch Size", f"{batch_size:,}")
-    release_time, release_count = initial_action.release_schedule[0]
-    cols[2].metric("Initial Release Time", minutes_to_clock(release_time))
-    cols[3].metric("Initial Proposal", initial_action.label.replace("_", " ").title())
-
-    st.caption(initial_action.rationale)
+    with st.container(border=True):
+        cols = st.columns(4)
+        cols[0].metric("Objective", "Release batch safely")
+        cols[1].metric("Batch Size", f"{batch_size:,}")
+        release_time, release_count = initial_action.release_schedule[0]
+        cols[2].metric("Initial Release Time", minutes_to_clock(release_time))
+        cols[3].metric("Initial Proposal", initial_action.label.replace("_", " ").title())
+        st.caption(initial_action.rationale)
 
     st.markdown("**Agent Execution Trace**")
     for step in result.trace:
@@ -190,15 +305,16 @@ def render_agent_control(result: AgentRunResult, batch_size: int) -> None:
 
 
 def render_simulation_results(result: AgentRunResult) -> None:
+    render_kicker("Step 02 · Monte Carlo Engine")
     st.subheader("Simulation Results")
     initial_step = result.trace[0]
     revised_step = result.trace[1] if len(result.trace) > 1 else None
 
     st.markdown("**Initial Proposal**")
-    _render_verdict_metrics(initial_step)
+    with st.container(border=True):
+        _render_verdict_metrics(initial_step)
 
     if revised_step is not None:
-        st.markdown("---")
         st.markdown("**Revised Proposal (agent-adjusted)**")
         st.caption(
             "Release schedule: "
@@ -207,7 +323,8 @@ def render_simulation_results(result: AgentRunResult) -> None:
                 for t, c in revised_step.action.release_schedule
             )
         )
-        _render_verdict_metrics(revised_step)
+        with st.container(border=True):
+            _render_verdict_metrics(revised_step)
 
     st.markdown("**Initial vs. Revised — Monte Carlo Outcomes**")
     _render_risk_comparison_charts(initial_step, revised_step)
@@ -254,10 +371,20 @@ def _render_risk_comparison_charts(initial_step, revised_step) -> None:
 
     with col1:
         fig = go.Figure()
-        fig.add_bar(x=labels, y=shortfall_counts, marker_color=bar_colors, showlegend=False)
+        fig.add_bar(
+            x=labels,
+            y=shortfall_counts,
+            marker_color=bar_colors,
+            marker_line_width=0,
+            text=shortfall_counts,
+            textposition="outside",
+            textfont=dict(color=PRIMARY_TEXT, size=12),
+            showlegend=False,
+        )
         fig.update_layout(
             title=dict(text="Trials with Shortfall", font=dict(size=13, color=MUTED)),
             yaxis_title="Trials",
+            bargap=0.45,
             **PLOTLY_LAYOUT,
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -270,10 +397,20 @@ def _render_risk_comparison_charts(initial_step, revised_step) -> None:
 
     with col2:
         fig = go.Figure()
-        fig.add_bar(x=labels, y=impact_counts, marker_color=bar_colors, showlegend=False)
+        fig.add_bar(
+            x=labels,
+            y=impact_counts,
+            marker_color=bar_colors,
+            marker_line_width=0,
+            text=[f"{v:,}" for v in impact_counts],
+            textposition="outside",
+            textfont=dict(color=PRIMARY_TEXT, size=12),
+            showlegend=False,
+        )
         fig.update_layout(
             title=dict(text="Expected Impact (payments)", font=dict(size=13, color=MUTED)),
             yaxis_title="Payments",
+            bargap=0.45,
             **PLOTLY_LAYOUT,
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -286,17 +423,19 @@ def _render_risk_comparison_charts(initial_step, revised_step) -> None:
 
 
 def render_execution(batch: Optional[MockPayoutBatch]) -> None:
+    render_kicker("Step 03 · Mock Gateway")
     st.subheader("Execution — Mock PayPal Gateway")
     if batch is None:
         st.info("No execution yet — the proposal has not been approved for execution.")
         return
 
-    cols = st.columns(4)
-    cols[0].metric("Batch ID", batch.batch_id[:12] + "…")
-    cols[1].metric("Payout Items", f"{batch.batch_size:,}")
-    cols[2].metric("Status", batch.status)
-    cols[3].metric("Submitted At (UTC)", batch.submitted_at.split("T")[1][:8])
-    st.caption(f"Submission label: `{batch.label}`")
+    with st.container(border=True):
+        cols = st.columns(4)
+        cols[0].metric("Batch ID", batch.batch_id[:12] + "…")
+        cols[1].metric("Payout Items", f"{batch.batch_size:,}")
+        cols[2].metric("Status", batch.status)
+        cols[3].metric("Submitted At (UTC)", batch.submitted_at.split("T")[1][:8])
+        st.caption(f"Submission label: `{batch.label}`")
 
 
 def render_verification(
@@ -305,16 +444,19 @@ def render_verification(
     batch: Optional[MockPayoutBatch] = None,
     predicted_impact_count: Optional[float] = None,
 ) -> None:
+    render_kicker("Step 04 · Independent Collector", color=CORAL)
     st.subheader("Independent Verification")
     if comparison is None:
         st.info("No verification yet — nothing has been executed.")
         return
 
     st.markdown(
-        f"<span style='color:{TEAL}; font-weight:600;'>Collector status</span>&nbsp;"
-        f"<span style='color:{PRIMARY_TEXT};'>— outcome independently retrieved and compared.</span>",
+        "<span class='inoema-pill'><span class='inoema-dot'></span>"
+        f"<span style='color:{PRIMARY_TEXT}; font-weight:600;'>Collector status</span>&nbsp;"
+        f"<span style='color:{MUTED};'>outcome independently retrieved and compared</span></span>",
         unsafe_allow_html=True,
     )
+    st.write("")
 
     batch_size = batch.batch_size if batch is not None else None
     actual_missed_count: Optional[int] = None
@@ -323,39 +465,49 @@ def render_verification(
     elif batch_size is not None:
         actual_missed_count = round(comparison.actual_missed_fraction * batch_size)
 
-    cols = st.columns(4)
-    if predicted_impact_count is not None:
-        cols[0].metric("Predicted Impact", f"{round(predicted_impact_count):,} payments")
-    else:
-        cols[0].metric("Predicted Impact", f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
-    cols[0].caption(f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
+    with st.container(border=True):
+        cols = st.columns(4)
+        if predicted_impact_count is not None:
+            cols[0].metric("Predicted Impact", f"{round(predicted_impact_count):,} payments")
+        else:
+            cols[0].metric("Predicted Impact", f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
+        cols[0].caption(f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
 
-    if actual_missed_count is not None:
-        cols[1].metric("Actual Unreconciled", f"{actual_missed_count:,} payments")
-    else:
-        cols[1].metric("Actual Unreconciled", f"{comparison.actual_missed_fraction:.1%} of batch")
-    cols[1].caption(f"{comparison.actual_missed_fraction:.1%} of batch")
+        if actual_missed_count is not None:
+            cols[1].metric("Actual Unreconciled", f"{actual_missed_count:,} payments")
+        else:
+            cols[1].metric("Actual Unreconciled", f"{comparison.actual_missed_fraction:.1%} of batch")
+        cols[1].caption(f"{comparison.actual_missed_fraction:.1%} of batch")
 
-    cols[2].metric("Prediction Error", f"{comparison.prediction_error:+.1%}")
-    cols[3].metric("Brier Component (this run)", f"{comparison.brier_component:.4f}")
-    st.caption(
-        "Brier component shown is a single-sample term "
-        "(predicted_risk_score − actual_shortfall_indicator)² for this one run — "
-        "not a calibrated Brier score, which needs many runs. See Phase 5 (evaluation)."
-    )
+        cols[2].metric("Prediction Error", f"{comparison.prediction_error:+.1%}")
+        cols[3].metric("Brier Component (this run)", f"{comparison.brier_component:.4f}")
+        st.caption(
+            "Brier component shown is a single-sample term "
+            "(predicted_risk_score − actual_shortfall_indicator)² for this one run — "
+            "not a calibrated Brier score, which needs many runs. See Phase 5 (evaluation)."
+        )
 
     if actual_outcome_row is not None:
         st.markdown("**Reality Simulator Details (hidden from the predictor)**")
-        rcols = st.columns(3)
-        rcols[0].metric("Day Slowdown Multiplier", f"{actual_outcome_row['day_slowdown_multiplier']:.2f}×")
-        rcols[1].metric("Reality Seed", actual_outcome_row["reality_seed"])
-        rcols[2].metric("Completed by Close", f"{actual_outcome_row['n_completed_by_close']:,}")
+        with st.container(border=True):
+            rcols = st.columns(3)
+            rcols[0].metric("Day Slowdown Multiplier", f"{actual_outcome_row['day_slowdown_multiplier']:.2f}×")
+            rcols[1].metric("Reality Seed", actual_outcome_row["reality_seed"])
+            rcols[2].metric("Completed by Close", f"{actual_outcome_row['n_completed_by_close']:,}")
 
     st.markdown("**Predicted vs. Actual**")
     fig = go.Figure()
     if predicted_impact_count is not None and actual_missed_count is not None:
-        fig.add_bar(name="PREDICTED", x=["Executed Batch"], y=[round(predicted_impact_count)], marker_color=TEAL)
-        fig.add_bar(name="ACTUAL (independent)", x=["Executed Batch"], y=[actual_missed_count], marker_color=CORAL)
+        fig.add_bar(
+            name="PREDICTED", x=["Executed Batch"], y=[round(predicted_impact_count)],
+            marker_color=TEAL, marker_line_width=0,
+            text=[f"{round(predicted_impact_count):,}"], textposition="outside",
+        )
+        fig.add_bar(
+            name="ACTUAL (independent)", x=["Executed Batch"], y=[actual_missed_count],
+            marker_color=CORAL, marker_line_width=0,
+            text=[f"{actual_missed_count:,}"], textposition="outside",
+        )
         y_title = "Unreconciled payments"
     else:
         fig.add_bar(
@@ -363,17 +515,20 @@ def render_verification(
             x=["Executed Batch"],
             y=[comparison.predicted_expected_impact_fraction],
             marker_color=TEAL,
+            marker_line_width=0,
         )
         fig.add_bar(
             name="ACTUAL (independent)",
             x=["Executed Batch"],
             y=[comparison.actual_missed_fraction],
             marker_color=CORAL,
+            marker_line_width=0,
         )
         y_title = "Fraction of batch"
     fig.update_layout(
         barmode="group",
         yaxis_title=y_title,
+        bargap=0.4,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         **PLOTLY_LAYOUT,
     )
@@ -384,6 +539,7 @@ _TIMELINE_STEPS = ["PROPOSE", "SIMULATE", "ADJUST", "RE-SIMULATE", "APPROVE", "E
 
 
 def render_timeline(result: AgentRunResult, executed: bool, verified: bool) -> None:
+    render_kicker("Step 05 · Full Lifecycle")
     st.subheader("Agent Execution Timeline")
 
     was_adjusted = len(result.trace) > 1
@@ -401,15 +557,33 @@ def render_timeline(result: AgentRunResult, executed: bool, verified: bool) -> N
 
     steps = _TIMELINE_STEPS if was_adjusted else [s for s in _TIMELINE_STEPS if s not in ("ADJUST", "RE-SIMULATE")]
 
-    pending_color = CORAL if not approved else MUTED
+    # The first not-yet-completed step is where the run actually stopped --
+    # only that one gets the coral "blocked" treatment; later steps stay a
+    # neutral pending grey rather than all turning red.
+    blocked_step = None
+    if not approved:
+        for step in steps:
+            if step not in completed:
+                blocked_step = step
+                break
 
-    chips = []
-    for step in steps:
+    nodes = []
+    for i, step in enumerate(steps, start=1):
         if step in completed:
-            chips.append(f"<span style='color:{TEAL}; font-weight:600;'>{step}</span>")
+            circle_class, label_class, marker = "done", "", "&#10003;"
+        elif step == blocked_step:
+            circle_class, label_class, marker = "blocked", "blocked", "!"
         else:
-            chips.append(f"<span style='color:{pending_color};'>{step}</span>")
-    st.markdown(" &nbsp;→&nbsp; ".join(chips), unsafe_allow_html=True)
+            circle_class, label_class, marker = "", "pending", str(i)
+        line_class = "done" if (i > 1 and steps[i - 2] in completed and step in completed) else ""
+        nodes.append(
+            f"<div class='inoema-step'>"
+            f"<div class='inoema-step-line {line_class}'></div>"
+            f"<div class='inoema-step-circle {circle_class}'>{marker}</div>"
+            f"<div class='inoema-step-label {label_class}'>{step}</div>"
+            f"</div>"
+        )
+    st.markdown(f"<div class='inoema-stepper'>{''.join(nodes)}</div>", unsafe_allow_html=True)
 
     if not approved:
         st.error(

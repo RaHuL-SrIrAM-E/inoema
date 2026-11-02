@@ -106,10 +106,15 @@ def main() -> None:
 
     with st.sidebar:
         st.markdown("### Run Configuration")
+        st.caption("SCENARIO")
         batch_size = st.number_input("Batch size", min_value=10, max_value=50_000, value=BATCH_SIZE, step=100)
         n_trials = st.slider("Monte Carlo trials", min_value=50, max_value=500, value=200, step=10)
+        st.divider()
+        st.caption("REPRODUCIBILITY")
         master_seed = st.number_input("Agent master seed", min_value=0, value=0, step=1)
         reality_seed = st.number_input("Reality seed (independent)", min_value=0, value=11, step=1)
+        st.divider()
+        st.caption("APPROVAL GATE")
         risk_threshold = st.slider("Execution risk threshold", 0.0, 0.5, 0.05, 0.01)
         min_confidence = st.slider("Minimum confidence", 0.0, 1.0, 0.8, 0.05)
         st.caption("All runs are fully reproducible for a given seed.")
