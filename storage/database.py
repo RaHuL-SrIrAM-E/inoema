@@ -264,3 +264,10 @@ def fetch_prediction(conn: sqlite3.Connection, batch_id: str) -> dict | None:
         "SELECT * FROM predictions WHERE batch_id = ?", (batch_id,)
     ).fetchone()
     return dict(row) if row is not None else None
+
+
+def fetch_actual_outcome(conn: sqlite3.Connection, batch_id: str) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM actual_outcomes WHERE batch_id = ?", (batch_id,)
+    ).fetchone()
+    return dict(row) if row is not None else None
