@@ -3,7 +3,9 @@
 Pure presentation layer: every function here only renders data that was
 already computed by agent.demo_agent / pipeline.py / the storage layer.
 Nothing here runs a simulation, calls the Monte Carlo engine, or decides
-anything -- it only displays what those modules already produced.
+anything -- it only displays what those modules already produced, and
+only ever reformats existing numbers (e.g. frequency -> trial count);
+it never recomputes or alters a result.
 
 Every section is explicitly labelled as synthetic/mocked, per the
 project's constraint that nothing here represents a real financial
@@ -21,59 +23,137 @@ from agent.demo_agent import AgentRunResult
 from collector.collector import OutcomeComparison
 from execution.mock_paypal import MockPayoutBatch
 
+# --- INOEMA palette (light) -------------------------------------------------
+BG = "#FFFFFF"
+PRIMARY_TEXT = "#102C2B"
+TEAL = "#2CB6A4"
+CORAL = "#F07868"
+SURFACE = "#F3F7F5"
+BORDER = "#E4E9E7"
+MUTED = "#65716F"
+
+TEXT = PRIMARY_TEXT  # kept for readability at call sites below
+
+RISK_COLORS = {"LOW": TEAL, "MEDIUM": CORAL, "HIGH": CORAL, "UNKNOWN": CORAL}
+DECISION_COLORS = {"PROCEED": TEAL, "ADJUST": CORAL, "ABSTAIN": CORAL}
+
 SYNTHETIC_NOTICE = (
-    "🔧 **SYNTHETIC / MOCKED ENVIRONMENT** — no real PayPal, bank, or ledger "
+    "SYNTHETIC / MOCKED ENVIRONMENT — no real PayPal, bank, or ledger "
     "system is contacted anywhere in this demonstration."
 )
 
-RISK_COLORS = {
-    "LOW": "#34D399",
-    "MEDIUM": "#FBBF24",
-    "HIGH": "#F87171",
-    "UNKNOWN": "#9CA3AF",
-}
 PLOTLY_LAYOUT = dict(
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#E6E8EE"),
-    margin=dict(l=40, r=20, t=40, b=40),
+    template="plotly_white",
+    paper_bgcolor=BG,
+    plot_bgcolor=BG,
+    font=dict(color=PRIMARY_TEXT, family="sans-serif"),
+    margin=dict(l=40, r=20, t=30, b=40),
+    xaxis=dict(gridcolor=BORDER, linecolor=BORDER, zerolinecolor=BORDER),
+    yaxis=dict(gridcolor=BORDER, linecolor=BORDER, zerolinecolor=BORDER),
 )
 
 
-def _minutes_to_clock(minutes: float) -> str:
+def inject_base_style() -> None:
+    """Small, targeted CSS overrides -- restrained cards, no glow/gradients,
+    muted secondary text, a teal (not blue) primary button. Applied once."""
+    st.markdown(
+        f"""
+        <style>
+          div[data-testid="stMetric"] {{
+              background: {SURFACE};
+              border: 1px solid {BORDER};
+              border-radius: 4px;
+              padding: 0.55rem 0.75rem;
+          }}
+          div[data-testid="stMetricValue"] {{
+              font-size: 1.35rem;
+              font-weight: 600;
+              color: {PRIMARY_TEXT};
+          }}
+          div[data-testid="stMetricLabel"] {{
+              color: {MUTED};
+              font-size: 0.75rem;
+              text-transform: uppercase;
+              letter-spacing: 0.03em;
+          }}
+          .stButton > button[kind="primary"] {{
+              background-color: {TEAL};
+              border: 1px solid {TEAL};
+              color: #06211D;
+              border-radius: 4px;
+              font-weight: 600;
+              box-shadow: none;
+          }}
+          .stButton > button[kind="primary"]:hover {{
+              background-color: #26A294;
+              border-color: #26A294;
+              color: #06211D;
+          }}
+          .stButton > button[kind="secondary"] {{
+              border-radius: 4px;
+              border-color: {BORDER};
+              color: {PRIMARY_TEXT};
+          }}
+          hr {{ border-color: {BORDER}; }}
+          [data-testid="stExpander"] {{
+              border: 1px solid {BORDER};
+              border-radius: 4px;
+          }}
+          code {{
+              color: {PRIMARY_TEXT};
+          }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def minutes_to_clock(minutes: float) -> str:
     total = round(minutes)
     hour = 16 + total // 60
     minute = total % 60
     return f"{int(hour):02d}:{int(minute):02d}"
 
 
+def shortfall_trial_count(mc_result) -> int:
+    """Recover the integer trial count behind mc_result.p_shortfall, for
+    display -- this reformats an existing value, it does not recompute it."""
+    return round(mc_result.p_shortfall * mc_result.n_trials)
+
+
 def render_header() -> None:
+    inject_base_style()
     st.markdown(
-        """
-        <div style="padding: 0.5rem 0 1.2rem 0; border-bottom: 1px solid #262B3A; margin-bottom: 1.2rem;">
+        f"""
+        <div style="padding: 0.4rem 0 1rem 0; border-bottom: 1px solid {BORDER}; margin-bottom: 1rem;">
           <div style="display:flex; align-items:baseline; gap: 0.75rem;">
-            <span style="font-size: 2.1rem; font-weight: 800; letter-spacing: 0.04em; color:#E6E8EE;">INOEMA</span>
-            <span style="font-size: 0.95rem; color:#8B93A7;">Simulation Infrastructure for Autonomous Systems</span>
+            <span style="font-size: 1.9rem; font-weight: 700; letter-spacing: 0.03em; color:{PRIMARY_TEXT};">INOEMA</span>
+            <span style="font-size: 0.92rem; color:{MUTED};">Simulation Infrastructure for Autonomous Systems</span>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    cols = st.columns([2, 1, 1])
+    st.markdown(
+        f"""
+        <div style="border-left: 3px solid {CORAL}; background:{SURFACE}; padding: 0.5rem 0.9rem;
+                    border-radius: 2px; margin-bottom: 0.9rem; color:{PRIMARY_TEXT}; font-size:0.88rem;">
+          <strong>{SYNTHETIC_NOTICE}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    cols = st.columns([1, 1, 6])
     with cols[0]:
         st.markdown(
-            f"<span style='color:#FBBF24; font-weight:600;'>{SYNTHETIC_NOTICE}</span>",
+            f"<span style='color:{TEAL};'>&#9679;</span>&nbsp;<span style='color:{MUTED};'>Engine</span> "
+            f"<span style='color:{PRIMARY_TEXT};'>Online</span>",
             unsafe_allow_html=True,
         )
     with cols[1]:
         st.markdown(
-            "<span style='color:#34D399;'>&#9679;</span>&nbsp;**Engine** — Online",
-            unsafe_allow_html=True,
-        )
-    with cols[2]:
-        st.markdown(
-            "<span style='color:#34D399;'>&#9679;</span>&nbsp;**Mode** — Mocked",
+            f"<span style='color:{TEAL};'>&#9679;</span>&nbsp;<span style='color:{MUTED};'>Mode</span> "
+            f"<span style='color:{PRIMARY_TEXT};'>Mocked</span>",
             unsafe_allow_html=True,
         )
 
@@ -86,7 +166,7 @@ def render_agent_control(result: AgentRunResult, batch_size: int) -> None:
     cols[0].metric("Objective", "Release batch safely")
     cols[1].metric("Batch Size", f"{batch_size:,}")
     release_time, release_count = initial_action.release_schedule[0]
-    cols[2].metric("Initial Release Time", _minutes_to_clock(release_time))
+    cols[2].metric("Initial Release Time", minutes_to_clock(release_time))
     cols[3].metric("Initial Proposal", initial_action.label.replace("_", " ").title())
 
     st.caption(initial_action.rationale)
@@ -103,7 +183,7 @@ def render_agent_control(result: AgentRunResult, batch_size: int) -> None:
             st.write(
                 f"**Release schedule:** "
                 + ", ".join(
-                    f"{_minutes_to_clock(t)} × {c:,}" for t, c in step.action.release_schedule
+                    f"{minutes_to_clock(t)} × {c:,}" for t, c in step.action.release_schedule
                 )
             )
             st.write(f"**Agent decision:** {step.agent_decision.rationale}")
@@ -123,54 +203,86 @@ def render_simulation_results(result: AgentRunResult) -> None:
         st.caption(
             "Release schedule: "
             + ", ".join(
-                f"{_minutes_to_clock(t)} × {c:,}"
+                f"{minutes_to_clock(t)} × {c:,}"
                 for t, c in revised_step.action.release_schedule
             )
         )
         _render_verdict_metrics(revised_step)
 
-    st.markdown("**Initial vs. Revised Risk**")
-    _render_risk_comparison_chart(initial_step, revised_step)
+    st.markdown("**Initial vs. Revised — Monte Carlo Outcomes**")
+    _render_risk_comparison_charts(initial_step, revised_step)
 
 
 def _render_verdict_metrics(step) -> None:
     verdict = step.verdict
     mc = step.mc_result
+    n_shortfall = shortfall_trial_count(mc)
+
     cols = st.columns(5)
     cols[0].metric("Monte Carlo Trials", f"{mc.n_trials:,}")
-    cols[1].metric("Risk Score", f"{verdict.risk_score:.1%}")
+    cols[1].metric("Trials with Shortfall", f"{n_shortfall} / {mc.n_trials}")
+    cols[1].caption(f"{verdict.risk_score:.1%} of trials")
     cols[2].metric("Confidence", f"{verdict.confidence:.1%}")
-    cols[3].metric("Expected Impact", f"{verdict.expected_impact_count:,.0f} payments")
-    risk_color = RISK_COLORS.get(verdict.risk_level.value, "#9CA3AF")
+    cols[3].metric("Expected Impact", f"{round(verdict.expected_impact_count):,} payments")
+    cols[3].caption(f"{verdict.expected_impact_fraction:.1%} of batch")
+
+    risk_color = RISK_COLORS.get(verdict.risk_level.value, MUTED)
     cols[4].markdown(
         f"<div style='text-align:center;'>"
-        f"<div style='color:#8B93A7; font-size:0.8rem;'>Risk Level / Recommendation</div>"
-        f"<div style='font-size:1.3rem; font-weight:700; color:{risk_color};'>{verdict.risk_level.value}</div>"
-        f"<div style='font-size:0.85rem; color:#E6E8EE;'>{verdict.decision.value}</div>"
+        f"<div style='color:{MUTED}; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em;'>"
+        f"Risk Level / Recommendation</div>"
+        f"<div style='font-size:1.15rem; font-weight:600; color:{risk_color};'>{verdict.risk_level.value}</div>"
+        f"<div style='font-size:0.82rem; color:{PRIMARY_TEXT};'>{verdict.decision.value}</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
 
-def _render_risk_comparison_chart(initial_step, revised_step) -> None:
-    labels = ["Initial Proposal"]
-    risk_scores = [initial_step.verdict.risk_score]
-    impact_fractions = [initial_step.verdict.expected_impact_fraction]
+def _render_risk_comparison_charts(initial_step, revised_step) -> None:
+    steps = [("Initial", initial_step)]
     if revised_step is not None:
-        labels.append("Revised Proposal")
-        risk_scores.append(revised_step.verdict.risk_score)
-        impact_fractions.append(revised_step.verdict.expected_impact_fraction)
+        steps.append(("Revised", revised_step))
 
-    fig = go.Figure()
-    fig.add_bar(name="Risk Score — P(material shortfall)", x=labels, y=risk_scores, marker_color="#F87171")
-    fig.add_bar(name="Expected Impact Fraction", x=labels, y=impact_fractions, marker_color="#6C8CFF")
-    fig.update_layout(
-        barmode="group",
-        yaxis_tickformat=".0%",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        **PLOTLY_LAYOUT,
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    labels = [label for label, _ in steps]
+    bar_colors = [RISK_COLORS.get(s.verdict.risk_level.value, MUTED) for _, s in steps]
+
+    shortfall_counts = [shortfall_trial_count(s.mc_result) for _, s in steps]
+    trial_totals = [s.mc_result.n_trials for _, s in steps]
+    impact_counts = [round(s.verdict.expected_impact_count) for _, s in steps]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig = go.Figure()
+        fig.add_bar(x=labels, y=shortfall_counts, marker_color=bar_colors, showlegend=False)
+        fig.update_layout(
+            title=dict(text="Trials with Shortfall", font=dict(size=13, color=MUTED)),
+            yaxis_title="Trials",
+            **PLOTLY_LAYOUT,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            " · ".join(
+                f"{label}: {count}/{total} ({count / total:.1%})"
+                for label, count, total in zip(labels, shortfall_counts, trial_totals)
+            )
+        )
+
+    with col2:
+        fig = go.Figure()
+        fig.add_bar(x=labels, y=impact_counts, marker_color=bar_colors, showlegend=False)
+        fig.update_layout(
+            title=dict(text="Expected Impact (payments)", font=dict(size=13, color=MUTED)),
+            yaxis_title="Payments",
+            **PLOTLY_LAYOUT,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            " · ".join(
+                f"{label}: {count:,} ({s.verdict.expected_impact_fraction:.1%} of batch)"
+                for label, count, (_, s) in zip(labels, impact_counts, steps)
+            )
+        )
 
 
 def render_execution(batch: Optional[MockPayoutBatch]) -> None:
@@ -184,22 +296,46 @@ def render_execution(batch: Optional[MockPayoutBatch]) -> None:
     cols[1].metric("Payout Items", f"{batch.batch_size:,}")
     cols[2].metric("Status", batch.status)
     cols[3].metric("Submitted At (UTC)", batch.submitted_at.split("T")[1][:8])
-    st.caption(f"🔧 {batch.label} — submission label: `{batch.label}`")
+    st.caption(f"Submission label: `{batch.label}`")
 
 
 def render_verification(
-    comparison: Optional[OutcomeComparison], actual_outcome_row: Optional[dict]
+    comparison: Optional[OutcomeComparison],
+    actual_outcome_row: Optional[dict],
+    batch: Optional[MockPayoutBatch] = None,
+    predicted_impact_count: Optional[float] = None,
 ) -> None:
     st.subheader("Independent Verification")
     if comparison is None:
         st.info("No verification yet — nothing has been executed.")
         return
 
-    st.success("✅ Collector status: outcome independently retrieved and compared.")
+    st.markdown(
+        f"<span style='color:{TEAL}; font-weight:600;'>Collector status</span>&nbsp;"
+        f"<span style='color:{PRIMARY_TEXT};'>— outcome independently retrieved and compared.</span>",
+        unsafe_allow_html=True,
+    )
+
+    batch_size = batch.batch_size if batch is not None else None
+    actual_missed_count: Optional[int] = None
+    if actual_outcome_row is not None and batch_size is not None:
+        actual_missed_count = batch_size - actual_outcome_row["n_completed_by_close"]
+    elif batch_size is not None:
+        actual_missed_count = round(comparison.actual_missed_fraction * batch_size)
 
     cols = st.columns(4)
-    cols[0].metric("Predicted Impact (fraction)", f"{comparison.predicted_expected_impact_fraction:.1%}")
-    cols[1].metric("Actual Missed Fraction", f"{comparison.actual_missed_fraction:.1%}")
+    if predicted_impact_count is not None:
+        cols[0].metric("Predicted Impact", f"{round(predicted_impact_count):,} payments")
+    else:
+        cols[0].metric("Predicted Impact", f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
+    cols[0].caption(f"{comparison.predicted_expected_impact_fraction:.1%} of batch")
+
+    if actual_missed_count is not None:
+        cols[1].metric("Actual Unreconciled", f"{actual_missed_count:,} payments")
+    else:
+        cols[1].metric("Actual Unreconciled", f"{comparison.actual_missed_fraction:.1%} of batch")
+    cols[1].caption(f"{comparison.actual_missed_fraction:.1%} of batch")
+
     cols[2].metric("Prediction Error", f"{comparison.prediction_error:+.1%}")
     cols[3].metric("Brier Component (this run)", f"{comparison.brier_component:.4f}")
     st.caption(
@@ -217,21 +353,27 @@ def render_verification(
 
     st.markdown("**Predicted vs. Actual**")
     fig = go.Figure()
-    fig.add_bar(
-        name="PREDICTED (expected impact fraction)",
-        x=["Executed Batch"],
-        y=[comparison.predicted_expected_impact_fraction],
-        marker_color="#6C8CFF",
-    )
-    fig.add_bar(
-        name="ACTUAL (reality simulator, independent)",
-        x=["Executed Batch"],
-        y=[comparison.actual_missed_fraction],
-        marker_color="#F87171",
-    )
+    if predicted_impact_count is not None and actual_missed_count is not None:
+        fig.add_bar(name="PREDICTED", x=["Executed Batch"], y=[round(predicted_impact_count)], marker_color=TEAL)
+        fig.add_bar(name="ACTUAL (independent)", x=["Executed Batch"], y=[actual_missed_count], marker_color=CORAL)
+        y_title = "Unreconciled payments"
+    else:
+        fig.add_bar(
+            name="PREDICTED",
+            x=["Executed Batch"],
+            y=[comparison.predicted_expected_impact_fraction],
+            marker_color=TEAL,
+        )
+        fig.add_bar(
+            name="ACTUAL (independent)",
+            x=["Executed Batch"],
+            y=[comparison.actual_missed_fraction],
+            marker_color=CORAL,
+        )
+        y_title = "Fraction of batch"
     fig.update_layout(
         barmode="group",
-        yaxis_tickformat=".0%",
+        yaxis_title=y_title,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         **PLOTLY_LAYOUT,
     )
@@ -259,16 +401,18 @@ def render_timeline(result: AgentRunResult, executed: bool, verified: bool) -> N
 
     steps = _TIMELINE_STEPS if was_adjusted else [s for s in _TIMELINE_STEPS if s not in ("ADJUST", "RE-SIMULATE")]
 
+    pending_color = CORAL if not approved else MUTED
+
     chips = []
     for step in steps:
         if step in completed:
-            chips.append(f"<span style='color:#34D399; font-weight:700;'>✔ {step}</span>")
+            chips.append(f"<span style='color:{TEAL}; font-weight:600;'>{step}</span>")
         else:
-            chips.append(f"<span style='color:#4B5263;'>{step}</span>")
+            chips.append(f"<span style='color:{pending_color};'>{step}</span>")
     st.markdown(" &nbsp;→&nbsp; ".join(chips), unsafe_allow_html=True)
 
     if not approved:
         st.error(
-            "⛔ HUMAN INTERVENTION REQUIRED — the agent stopped before execution "
+            "HUMAN INTERVENTION REQUIRED — the agent stopped before execution "
             f"({result.final_decision.rationale})"
         )

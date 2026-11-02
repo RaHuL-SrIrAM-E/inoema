@@ -30,6 +30,7 @@ from dashboard.components import (
     render_timeline,
     render_verification,
 )
+from dashboard.developer_integration import render_developer_integration
 from execution.mock_paypal import get_batch
 from pipeline import run_pipeline
 from storage.database import fetch_actual_outcome, init_db
@@ -63,6 +64,7 @@ def _run_full_demo(agent_config: AgentConfig, batch_size: int, reality_seed: int
         batch = None
         comparison = None
         actual_outcome_row = None
+        predicted_impact_count = result.trace[-1].verdict.expected_impact_count
 
         if result.final_decision.approved_for_execution:
             st.write("**APPROVE** — proposal cleared the agent's risk/confidence thresholds.")
@@ -75,13 +77,14 @@ def _run_full_demo(agent_config: AgentConfig, batch_size: int, reality_seed: int
             conn = init_db(db_path)
             actual_outcome_row = fetch_actual_outcome(conn, comparison.batch_id)
             conn.close()
+            actual_missed_count = batch.batch_size - actual_outcome_row["n_completed_by_close"]
             st.write(
-                f"&nbsp;&nbsp;↳ actual missed fraction = `{comparison.actual_missed_fraction:.3f}` "
-                f"(predicted `{comparison.predicted_expected_impact_fraction:.3f}`)"
+                f"&nbsp;&nbsp;↳ actual unreconciled = `{actual_missed_count}` payments "
+                f"(predicted `{round(predicted_impact_count)}`)"
             )
             status.update(label="INOEMA simulation complete", state="complete")
         else:
-            st.write(f"⛔ **{result.final_decision.rationale}**")
+            st.write(f"**{result.final_decision.rationale}**")
             status.update(label="Simulation halted — human intervention required", state="error")
 
     return {
@@ -90,13 +93,13 @@ def _run_full_demo(agent_config: AgentConfig, batch_size: int, reality_seed: int
         "batch": batch,
         "comparison": comparison,
         "actual_outcome_row": actual_outcome_row,
+        "predicted_impact_count": predicted_impact_count,
     }
 
 
 def main() -> None:
     st.set_page_config(
         page_title="INOEMA — Simulation Control Center",
-        page_icon="🧭",
         layout="wide",
     )
     render_header()
@@ -111,33 +114,43 @@ def main() -> None:
         min_confidence = st.slider("Minimum confidence", 0.0, 1.0, 0.8, 0.05)
         st.caption("All runs are fully reproducible for a given seed.")
 
-    st.markdown("")
-    run_clicked = st.button("🚀 Run INOEMA Simulation", type="primary", use_container_width=True)
+    tab_control, tab_dev = st.tabs(["Simulation Control Center", "Developer Integration"])
 
-    if run_clicked:
-        agent_config = AgentConfig(
-            risk_threshold=risk_threshold,
-            min_confidence=min_confidence,
-            n_trials=n_trials,
-            master_seed=int(master_seed),
-        )
-        st.session_state["demo"] = _run_full_demo(agent_config, int(batch_size), int(reality_seed), DB_PATH)
+    with tab_control:
+        st.markdown("")
+        run_clicked = st.button("Run INOEMA Simulation", type="primary", use_container_width=True)
 
-    demo = st.session_state.get("demo")
-    if demo is None:
-        st.info("Configure parameters in the sidebar and click **Run INOEMA Simulation** to begin.")
-        return
+        if run_clicked:
+            agent_config = AgentConfig(
+                risk_threshold=risk_threshold,
+                min_confidence=min_confidence,
+                n_trials=n_trials,
+                master_seed=int(master_seed),
+            )
+            st.session_state["demo"] = _run_full_demo(agent_config, int(batch_size), int(reality_seed), DB_PATH)
 
-    st.divider()
-    render_agent_control(demo["result"], demo["batch_size"])
-    st.divider()
-    render_simulation_results(demo["result"])
-    st.divider()
-    render_execution(demo["batch"])
-    st.divider()
-    render_verification(demo["comparison"], demo["actual_outcome_row"])
-    st.divider()
-    render_timeline(demo["result"], executed=demo["batch"] is not None, verified=demo["comparison"] is not None)
+        demo = st.session_state.get("demo")
+        if demo is None:
+            st.info("Configure parameters in the sidebar and click **Run INOEMA Simulation** to begin.")
+        else:
+            st.divider()
+            render_agent_control(demo["result"], demo["batch_size"])
+            st.divider()
+            render_simulation_results(demo["result"])
+            st.divider()
+            render_execution(demo["batch"])
+            st.divider()
+            render_verification(
+                demo["comparison"],
+                demo["actual_outcome_row"],
+                batch=demo["batch"],
+                predicted_impact_count=demo["predicted_impact_count"],
+            )
+            st.divider()
+            render_timeline(demo["result"], executed=demo["batch"] is not None, verified=demo["comparison"] is not None)
+
+    with tab_dev:
+        render_developer_integration(st.session_state.get("demo"))
 
 
 main()

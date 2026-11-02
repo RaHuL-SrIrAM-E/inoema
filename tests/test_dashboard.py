@@ -29,3 +29,31 @@ def test_dashboard_runs_full_demo_on_button_click():
         "Agent Execution Timeline",
     ):
         assert expected in subheader_text
+
+
+def test_developer_integration_renders_before_a_run():
+    at = AppTest.from_file(APP_PATH)
+    at.run(timeout=60)
+    assert not at.exception
+
+    subheader_text = [h.value for h in at.subheader]
+    assert "Developer Integration" in subheader_text
+    markdown_text = "\n".join(m.value for m in at.markdown)
+    assert "REST API" in markdown_text
+    assert "MCP Tool Catalogue" in markdown_text
+    assert "Architecture" in markdown_text
+
+
+def test_developer_integration_mcp_trace_button_after_run():
+    at = AppTest.from_file(APP_PATH)
+    at.run(timeout=60)
+
+    at.button[0].click().run(timeout=120)  # Run INOEMA Simulation
+    assert not at.exception
+
+    mcp_button = next(b for b in at.button if b.label == "Run example MCP interaction")
+    mcp_button.click().run(timeout=30)
+    assert not at.exception
+
+    expander_labels = [e.label for e in at.expander]
+    assert any("Agent discovers available INOEMA tools" in label for label in expander_labels)
