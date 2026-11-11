@@ -5,3 +5,5 @@ streamlit
 plotly
 fastmcp
 pytest
+httpx
+anthropic
