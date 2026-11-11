@@ -180,7 +180,9 @@ class PaymentAgent:
         st.experiment_id = exp.result["experiment_id"]
         store.set_experiment(st.execution_id, st.experiment_id)
         sc = await self._call(st, ad, "generate_payment_scenarios", {"experiment_id": st.experiment_id,
-                              "scenarios": [{"preset": "baseline", "n_transactions": spec.n_transactions, "name": "baseline"}]}, "harness", 0)
+                              "scenarios": [{"preset": spec.scenario_preset, "n_transactions": spec.n_transactions, "name": "baseline",
+                                           **({"amount_median": spec.amount_median} if spec.amount_median is not None else {}),
+                                           **({"amount_sigma": spec.amount_sigma} if spec.amount_sigma is not None else {})}]}, "harness", 0)
         if not sc.ok:
             raise AgentError(f"could not create scenario: {sc.result}")
         st.baseline_scenario = sc.result["scenarios"][0]["scenario_id"]

@@ -1,0 +1,142 @@
+{
+  "url": "http://localhost:8790/",
+  "viewport": "1440x900 (screenshots full page height)",
+  "steps": [
+    {
+      "name": "01_overview_live_default",
+      "file": "docs/screenshots/01_overview_live_default.png",
+      "headings": [
+        "Payments",
+        "Overview"
+      ],
+      "header_pill": "Live workspace",
+      "mode_verified": true,
+      "page_height_px": 3039,
+      "page_exceptions": []
+    },
+    {
+      "name": "02_policy_optimization_live",
+      "file": "docs/screenshots/02_policy_optimization_live.png",
+      "headings": [
+        "Payments",
+        "Policy Optimization"
+      ],
+      "header_pill": "Live workspace",
+      "mode_verified": true,
+      "page_height_px": 2465,
+      "page_exceptions": []
+    },
+    {
+      "name": "03_experiments_live",
+      "file": "docs/screenshots/03_experiments_live.png",
+      "headings": [
+        "Payments",
+        "Experiments"
+      ],
+      "header_pill": "Live workspace",
+      "mode_verified": true,
+      "page_height_px": 2405,
+      "page_exceptions": []
+    },
+    {
+      "name": "04_paypal_sandbox_live",
+      "file": "docs/screenshots/04_paypal_sandbox_live.png",
+      "headings": [
+        "Payments",
+        "PayPal Sandbox"
+      ],
+      "header_pill": "Live workspace",
+      "mode_verified": true,
+      "page_height_px": 1821,
+      "page_exceptions": []
+    },
+    {
+      "name": "05_agent_execution_traces_live",
+      "file": "docs/screenshots/05_agent_execution_traces_live.png",
+      "headings": [
+        "Payments",
+        "Agent Execution Traces"
+      ],
+      "header_pill": "Live workspace",
+      "mode_verified": true,
+      "page_height_px": 3152,
+      "page_exceptions": []
+    },
+    {
+      "name": "11_overview_demo",
+      "file": "docs/screenshots/11_overview_demo.png",
+      "headings": [
+        "Payments",
+        "Overview"
+      ],
+      "header_pill": "Demonstration mode \u00b7 historical data",
+      "mode_verified": true,
+      "page_height_px": 3183,
+      "page_exceptions": []
+    },
+    {
+      "name": "12_policy_optimization_demo",
+      "file": "docs/screenshots/12_policy_optimization_demo.png",
+      "headings": [
+        "Payments",
+        "Policy Optimization"
+      ],
+      "header_pill": "Demonstration mode \u00b7 historical data",
+      "mode_verified": true,
+      "page_height_px": 3908,
+      "page_exceptions": []
+    },
+    {
+      "name": "13_experiments_demo",
+      "file": "docs/screenshots/13_experiments_demo.png",
+      "headings": [
+        "Payments",
+        "Experiments"
+      ],
+      "header_pill": "Demonstration mode \u00b7 historical data",
+      "mode_verified": true,
+      "page_height_px": 2405,
+      "page_exceptions": []
+    },
+    {
+      "name": "14_paypal_sandbox_demo",
+      "file": "docs/screenshots/14_paypal_sandbox_demo.png",
+      "headings": [
+        "Payments",
+        "PayPal Sandbox"
+      ],
+      "header_pill": "Demonstration mode \u00b7 historical data",
+      "mode_verified": true,
+      "page_height_px": 1893,
+      "page_exceptions": []
+    },
+    {
+      "name": "15_agent_execution_traces_demo",
+      "file": "docs/screenshots/15_agent_execution_traces_demo.png",
+      "headings": [
+        "Payments",
+        "Agent Execution Traces"
+      ],
+      "header_pill": "Demonstration mode \u00b7 historical data",
+      "mode_verified": true,
+      "page_height_px": 3152,
+      "page_exceptions": []
+    },
+    {
+      "name": "20_original_simulation_control_center",
+      "file": "docs/screenshots/20_original_simulation_control_center.png",
+      "headings": [
+        "Run Configuration",
+        "Developer Integration"
+      ],
+      "header_pill": "Engine Online | Mode Mocked | ILLUSTRATIVE \u2014 mock payload | ILLUSTRATIVE \u2014 mock payload | ILLUSTRATIVE \u2014 mock payload | ILLUSTRATIVE \u2014 mock payload | ILLUSTRATIVE \u2014 mock payload",
+      "mode_verified": true,
+      "page_height_px": 924,
+      "page_exceptions": []
+    }
+  ],
+  "demo_mode_enabled": true,
+  "demo_mode_disabled_again": true,
+  "console_errors": [],
+  "browser": "chrome-headless-shell-mac-arm64"
+}

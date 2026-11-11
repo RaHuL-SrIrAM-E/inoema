@@ -61,6 +61,13 @@ _POLICY_FIELDS = ("name", "retry_limit", "retry_intervals", "exponential_backoff
                   "alternate_funding_action", "terminal_failure_handling", "classification_aware", "idempotent_retries")
 
 
+# A feasible example policy for demonstrations when no agent-selected policy exists (clearly labelled as such wherever it is used).
+DEMO_POLICY = {"name": "demo_intelligent_2_retries", "retry_limit": 2, "retry_intervals": [5.0], "exponential_backoff": True, "backoff_base_minutes": 5.0,
+               "backoff_multiplier": 2.0, "backoff_max_interval_minutes": 240.0, "maximum_recovery_window": 4320.0, "buyer_action_timeout": 1440.0,
+               "request_buyer_action": True, "alternate_funding_action": "REQUEST_ALTERNATE", "terminal_failure_handling": "FLAG_FOR_REVIEW",
+               "classification_aware": True, "idempotent_retries": True}
+
+
 class PolicyNotApproved(ValueError):
     """The policy is not a selected, validated, feasible policy."""
 

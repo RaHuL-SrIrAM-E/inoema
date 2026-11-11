@@ -18,18 +18,12 @@ import sys
 import time
 
 from paypal.client import PayPalClient
-from paypal.execution import ACTION_SUPPORT, ExecStatus, ExecutionPolicy, PaymentRequest, RecoveryExecutor
+from paypal.execution import ACTION_SUPPORT, DEMO_POLICY, ExecStatus, ExecutionPolicy, PaymentRequest, RecoveryExecutor
 from paypal.models import PayPalApiError, PayPalConfig, PayPalConfigError, SandboxViolation
 from paypal.negative_testing import coverage_report, run_negative_tests
 from paypal.orders import OrdersApi
 from paypal.persistence import SandboxStore
 from spikes.envutil import load_env
-
-DEMO_POLICY = {"name": "demo_intelligent_2_retries", "retry_limit": 2, "retry_intervals": [5.0], "exponential_backoff": True, "backoff_base_minutes": 5.0,
-               "backoff_multiplier": 2.0, "backoff_max_interval_minutes": 240.0, "maximum_recovery_window": 4320.0, "buyer_action_timeout": 1440.0,
-               "request_buyer_action": True, "alternate_funding_action": "REQUEST_ALTERNATE", "terminal_failure_handling": "FLAG_FOR_REVIEW",
-               "classification_aware": True, "idempotent_retries": True}
-
 
 def build(args):
     cfg = PayPalConfig.from_env()

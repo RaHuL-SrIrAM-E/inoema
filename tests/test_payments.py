@@ -498,3 +498,22 @@ def test_acceptance_10k_transactions_three_policies_meaningful_differences():
     assert unn["intelligent_recovery"] == 0 and unn["immediate_retry"] > 100 and unn["exponential_backoff"] > 100
     lat = {n: r.aggregate.pooled["avg_recovery_time_minutes"]["value"] for n, r in res.items()}
     assert lat["immediate_retry"] < lat["exponential_backoff"] < lat["intelligent_recovery"]  # real trade-off
+
+
+# ---- Phase 5: optional order-value distribution overrides (scenario construction only; the simulation maths is unchanged)
+def test_amount_distribution_overrides_scale_bounds_and_preserve_defaults():
+    base = build_scenario("baseline", 1000)
+    same = build_scenario("baseline", 1000, amount_median=None, amount_sigma=None)
+    assert same.workload.amount == base.workload.amount  # no override => identical to before
+    big = build_scenario("baseline", 1000, amount_median=450.0, amount_sigma=0.5)
+    a0, a1 = base.workload.amount, big.workload.amount
+    assert (a1.median, a1.sigma) == (450.0, 0.5)
+    assert a1.low / a1.median == pytest.approx(a0.low / a0.median) and a1.high / a1.median == pytest.approx(a0.high / a0.median)  # shape preserved
+    assert big.validate() == []
+    assert build_scenario("baseline", 1000, amount_sigma=1.2).workload.amount.median == a0.median  # independent overrides
+    # the override really changes generated order values
+    from engine.payments.transaction_generator import generate_workload
+    import numpy as np
+    lo = generate_workload(base.workload, np.random.SeedSequence(1)).amounts.mean()
+    hi = generate_workload(big.workload, np.random.SeedSequence(1)).amounts.mean()
+    assert hi > 5 * lo

@@ -69,6 +69,9 @@ class ObjectiveSpec:
     """The merchant's objective as enforced by the deterministic evaluator."""
     text: str
     n_transactions: int = 10_000
+    scenario_preset: str = "baseline"
+    amount_median: Optional[float] = None  # None = the preset's default order-value distribution
+    amount_sigma: Optional[float] = None
     max_retries: Optional[int] = 5
     max_recovery_window_minutes: Optional[float] = 4320.0
     forbid_terminal_retries: bool = True
@@ -91,7 +94,8 @@ class ObjectiveSpec:
                 "latency_weight": self.weight_latency, "unnecessary_attempts_weight": self.weight_unnecessary}
 
     def to_dict(self) -> dict[str, Any]:
-        return {"text": self.text, "n_transactions": self.n_transactions, "constraints": self.constraints_payload(),
+        return {"text": self.text, "n_transactions": self.n_transactions, "scenario_preset": self.scenario_preset,
+                "amount_median": self.amount_median, "amount_sigma": self.amount_sigma, "constraints": self.constraints_payload(),
                 "weights": self.objective_payload(), "provenance": dict(self.provenance), "warnings": list(self.warnings)}
 
 

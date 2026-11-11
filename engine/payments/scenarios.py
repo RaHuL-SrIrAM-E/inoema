@@ -32,8 +32,14 @@ PRESETS = {
 }
 
 
+DEFAULT_AMOUNT = AmountDistribution()
+
+
 def build_scenario(preset: str = "baseline", n_transactions: int = 10_000, name: str | None = None,
-                   costs: CostModel | None = None) -> PaymentScenario:
+                   costs: CostModel | None = None, amount_median: float | None = None,
+                   amount_sigma: float | None = None) -> PaymentScenario:
+    """`amount_median` / `amount_sigma` optionally override the preset's lognormal order-value distribution. When the median is
+    overridden the clip bounds are scaled in proportion (bounds/median stay as in the preset), so the SHAPE is preserved."""
     if preset not in PRESETS:
         raise ValueError(f"unknown preset {preset!r}; choose from {sorted(PRESETS)}")
     amount = AmountDistribution()
@@ -48,6 +54,11 @@ def build_scenario(preset: str = "baseline", n_transactions: int = 10_000, name:
         amount = AmountDistribution(kind=AmountKind.LOGNORMAL, median=220.0, sigma=0.8, low=5.0, high=10000.0)
     elif preset == "high_failure_rate":
         model = model.scaled(initial_failure_multiplier=2.0)
+    if amount_median is not None:
+        k = amount_median / amount.median
+        amount = replace(amount, median=amount_median, low=amount.low * k, high=amount.high * k)
+    if amount_sigma is not None:
+        amount = replace(amount, sigma=amount_sigma)
     workload = replace(WorkloadConfig(), n_transactions=n_transactions, amount=amount)
     scenario = PaymentScenario(name=name or preset, workload=workload, failure_model=model,
                                costs=costs or CostModel(), description=PRESETS[preset])

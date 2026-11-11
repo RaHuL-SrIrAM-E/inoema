@@ -31,6 +31,7 @@ from dashboard.components import (
     render_verification,
 )
 from dashboard.developer_integration import render_developer_integration
+from dashboard.payments.workspace import render_payments_workspace
 from execution.mock_paypal import get_batch
 from pipeline import run_pipeline
 from storage.database import fetch_actual_outcome, init_db
@@ -97,11 +98,29 @@ def _run_full_demo(agent_config: AgentConfig, batch_size: int, reality_seed: int
     }
 
 
+PAYMENTS, LEGACY = "INOEMA Payments", "Simulation Control Center"
+WORKSPACES = [PAYMENTS, LEGACY]  # Payments first: it is the default workspace
+
+
+def _default_workspace() -> str:
+    """INOEMA Payments is the default workspace. The original Simulation Control Center remains available from the sidebar, and can be
+    opened directly with ?workspace=simulation or INOEMA_DEFAULT_WORKSPACE=simulation."""
+    q = st.query_params.get("workspace", os.environ.get("INOEMA_DEFAULT_WORKSPACE", "payments"))
+    return LEGACY if str(q).lower().startswith("sim") else PAYMENTS
+
+
 def main() -> None:
     st.set_page_config(
-        page_title="INOEMA — Simulation Control Center",
+        page_title="INOEMA",
         layout="wide",
     )
+    if "workspace" not in st.session_state:
+        st.session_state["workspace"] = _default_workspace()
+    with st.sidebar:
+        st.radio("Workspace", WORKSPACES, key="workspace")
+    if st.session_state["workspace"] == PAYMENTS:
+        render_payments_workspace()
+        return
     render_header()
 
     with st.sidebar:

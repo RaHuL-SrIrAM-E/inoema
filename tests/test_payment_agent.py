@@ -613,3 +613,30 @@ def test_agent_never_imports_the_simulation_engine():
                 mods = [n.module or ""] if isinstance(n, ast.ImportFrom) else [a.name for a in n.names] if isinstance(n, ast.Import) else []
                 bad += [(f, m) for m in mods if m == "engine" or m.startswith("engine.") or m.startswith("mcp_server") or m.startswith("spikes")]
     assert bad == []
+
+
+# =============================================================== Phase 5: workload preset + order-value distribution reach the simulation through MCP
+def test_amount_distribution_and_preset_flow_from_objective_to_stored_scenario(tmp_path):
+    script = [[("compare_recovery_policies", {"policies": [{"name": "k1", "base": "intelligent_recovery", "retry_limit": 1},
+                                                           {"name": "k2", "base": "intelligent_recovery", "retry_limit": 2}], "n_trials": 2})],
+              [("finish_optimization", {"shortlist": ["k2"], "rationale": "r"})]]
+    cfg = cfg_for(tmp_path, include_llm_explanation=False)
+    report = run(PaymentAgent(cfg, backend=ScriptedBackend(script)).run(OBJECTIVE, scenario_preset="buyer_friction", amount_median=400.0, amount_sigma=0.5))
+    assert report.merchant_objective["scenario_preset"] == "buyer_friction" and report.merchant_objective["amount_median"] == 400.0
+    calls = AgentRunStore(cfg.agent_db_path).tool_calls(report.execution_id)
+    gen = next(c for c in calls if c["tool"] == "generate_payment_scenarios" and c["source"] == "harness")
+    sc = json.loads(gen["args_json"])["scenarios"][0]
+    assert (sc["preset"], sc["amount_median"], sc["amount_sigma"]) == ("buyer_friction", 400.0, 0.5)
+    result = json.loads(gen["result_json"])["scenarios"][0]
+    assert result["amount_median"] == 400.0 and result["amount_sigma"] == 0.5
+    # the persisted scenario spec carries the override, and the simulation really used it (high order values => high recovered revenue)
+    from storage import payment_experiments as store
+    conn = store.connect(cfg.db_path)
+    spec = store.list_scenarios(conn, json.loads(gen["result_json"])["experiment_id"])[0]["spec"]
+    conn.close()
+    assert spec == {"preset": "buyer_friction", "n_transactions": 1000, "amount_median": 400.0, "amount_sigma": 0.5}
+    init_revenue = report.initial_policy  # initial policy evaluated on that scenario by the harness
+    final = next(json.loads(c["result_json"]) for c in calls if c["tool"] == "compare_recovery_policies" and c["iteration"] < 0)
+    mean_rev = final["policies"][report.selected_policy["name"]]["summary"]["per_trial_means"]["recovered_revenue"]
+    assert mean_rev > 5000  # default median 45 would give ~1,000 txns * 8% * ~45 * recovery ~ a few hundred; median 400 is an order of magnitude higher
+    assert init_revenue["name"] == "immediate_retry"

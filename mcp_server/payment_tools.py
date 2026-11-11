@@ -61,6 +61,8 @@ class ScenarioRequest(BaseModel):
     preset: PresetName = "baseline"
     n_transactions: int = Field(default=10_000, ge=100, le=MAX_TRANSACTIONS)
     name: Optional[str] = None
+    amount_median: Optional[float] = Field(default=None, gt=0, le=100_000, description="Override the lognormal median order value (currency units).")
+    amount_sigma: Optional[float] = Field(default=None, gt=0, le=3, description="Override the lognormal sigma of order values.")
 
 
 SweepName = Literal[tuple(SENS_PARAMS)]  # type: ignore[valid-type]
@@ -123,8 +125,9 @@ def _load(conn, experiment_id: str, scenario_id: str):
     if sc is None:
         raise ValueError(f"unknown scenario_id {scenario_id!r} for this experiment")
     cfg = exp["config"]
-    scenario = build_scenario(sc["spec"]["preset"], sc["spec"]["n_transactions"], sc["name"],
-                              costs=CostModel(**cfg["costs"]))
+    spec = sc["spec"]
+    scenario = build_scenario(spec["preset"], spec["n_transactions"], sc["name"], costs=CostModel(**cfg["costs"]),
+                              amount_median=spec.get("amount_median"), amount_sigma=spec.get("amount_sigma"))
     return exp, scenario, ObjectiveWeights(**cfg["objective"]), HardConstraints(**cfg["constraints"])
 
 
@@ -190,11 +193,16 @@ def register_payment_tools(mcp) -> None:
                 raise ValueError(f"unknown experiment_id {experiment_id!r}")
             out = []
             for req in scenarios:
-                sc = build_scenario(req.preset, req.n_transactions, req.name)
-                sid = store.add_scenario(conn, experiment_id, sc.name,
-                                         {"preset": req.preset, "n_transactions": req.n_transactions})
+                sc = build_scenario(req.preset, req.n_transactions, req.name, amount_median=req.amount_median, amount_sigma=req.amount_sigma)
+                spec = {"preset": req.preset, "n_transactions": req.n_transactions}
+                if req.amount_median is not None:
+                    spec["amount_median"] = req.amount_median
+                if req.amount_sigma is not None:
+                    spec["amount_sigma"] = req.amount_sigma
+                sid = store.add_scenario(conn, experiment_id, sc.name, spec)
                 out.append({"scenario_id": sid, "name": sc.name, "preset": req.preset,
                             "n_transactions": req.n_transactions, "description": sc.description,
+                            "amount_median": sc.workload.amount.median, "amount_sigma": sc.workload.amount.sigma,
                             "assumed_initial_failure_prob": {k.value: v for k, v in sc.failure_model.initial_failure_prob.items()}})
         finally:
             conn.close()
