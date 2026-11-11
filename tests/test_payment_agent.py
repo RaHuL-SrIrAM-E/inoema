@@ -559,6 +559,50 @@ def test_gemini_backend_retries_transient_errors_only():
     assert always.aio.models.calls == 3
 
 
+def _quota_error(delay, code=429):
+    return genai_errors.ClientError(code, {"error": {"code": code, "message": "You exceeded your current quota", "status": "RESOURCE_EXHAUSTED", "details": [
+        {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"description": "Generate content requests per day limit exceeded on Free Tier.",
+                                                                              "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", "quotaValue": "20",
+                                                                              "quotaDimensions": {"model": "m-served"}}]},
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": delay}]}})
+
+
+def test_daily_quota_is_not_retried_and_error_is_reported_in_full():
+    slept = []
+
+    async def fake_sleep(s):
+        slept.append(s)
+
+    client = _FakeClient([_quota_error("60110s")] * 4)
+    with pytest.raises(LLMError) as ei:
+        run(GeminiBackend(AgentConfig(api_key="k"), client=client, sleep=fake_sleep).generate([], types.GenerateContentConfig()))
+    msg = str(ei.value)
+    assert client.aio.models.calls == 1 and slept == []  # no pointless retries
+    assert "per day limit exceeded" in msg and "limit=20" in msg and "model=m-served" in msg and "16.7 h" in msg
+    assert len(msg) > 300  # not truncated to the first 300 characters
+
+
+def test_short_rate_limit_waits_the_server_advised_delay_then_succeeds():
+    slept = []
+
+    async def fake_sleep(s):
+        slept.append(s)
+
+    ok = types.GenerateContentResponse(candidates=[types.Candidate(content=types.Content(role="model", parts=[types.Part(text="hi")]))])
+    client = _FakeClient([_quota_error("7.5s"), ok])
+    assert run(GeminiBackend(AgentConfig(api_key="k"), client=client, sleep=fake_sleep).generate([], types.GenerateContentConfig())) is ok
+    assert slept == [8.5] and client.aio.models.calls == 2
+    from agent.payments.llm import rate_limit_info
+    assert rate_limit_info(ValueError("x")) == (None, None)
+
+
+def test_response_meta_records_the_model_that_actually_served_the_request():
+    from agent.payments.agent import response_meta
+    r = types.GenerateContentResponse(candidates=[], model_version="gemini-served-version", response_id="rid-1",
+                                      usage_metadata=types.GenerateContentResponseUsageMetadata(prompt_token_count=10, candidates_token_count=5, total_token_count=15))
+    assert response_meta(r) == {"model_version": "gemini-served-version", "response_id": "rid-1", "prompt_tokens": 10, "output_tokens": 5, "total_tokens": 15}
+
+
 # =============================================================== architecture boundary
 def test_agent_never_imports_the_simulation_engine():
     bad = []

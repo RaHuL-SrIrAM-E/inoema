@@ -41,6 +41,7 @@ class AgentConfig:
     llm_timeout_s: float = 90.0
     tool_timeout_s: float = 300.0
     llm_retries: int = 3
+    max_rate_limit_wait_s: float = 90.0  # longest server-advised rate-limit delay we will wait out (longer = give up, e.g. daily quota)
     initial_policy: str = "immediate_retry"  # the merchant's "current" policy (a baseline name)
     include_llm_explanation: bool = True
     server_module: str = SERVER_MODULE

@@ -78,6 +78,15 @@ class _State:
     limit_hit_this_turn: bool = False
 
 
+def response_meta(resp: Any) -> dict[str, Any]:
+    """Provenance of a Gemini response: the model that actually served it (may differ from the requested alias) and token usage."""
+    u = getattr(resp, "usage_metadata", None)
+    return {"model_version": getattr(resp, "model_version", None),
+            "response_id": getattr(resp, "response_id", None),
+            "prompt_tokens": getattr(u, "prompt_token_count", None), "output_tokens": getattr(u, "candidates_token_count", None),
+            "total_tokens": getattr(u, "total_token_count", None)}
+
+
 def _brief_args(args: dict[str, Any]) -> str:
     out = []
     for k, v in args.items():
@@ -216,7 +225,7 @@ class PaymentAgent:
             self._say(f"[LLM turn {iteration}] {text[:600] if text else '(no text)'}")
             for c in calls:
                 self._say(f"  LLM requests function: {c.name}({_brief_args(dict(c.args or {}))})")
-            store.add_event(st.execution_id, "llm_turn", {"iteration": iteration, "text": text,
+            store.add_event(st.execution_id, "llm_turn", {"iteration": iteration, "text": text, "response": response_meta(resp),
                                                          "function_calls": [{"name": c.name, "args": dict(c.args or {})} for c in calls]})
             if not calls:
                 st.termination = "model_stopped_without_finish"
