@@ -16,7 +16,8 @@ from engine.payments.simulator import compare_policies_monte_carlo
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAYMENT_TOOLS = {"create_payment_experiment", "generate_payment_scenarios", "run_payment_simulation",
-                 "compare_recovery_policies", "get_payment_experiment_results", "get_payment_transaction_trace"}
+                 "compare_recovery_policies", "get_payment_experiment_results", "get_payment_transaction_trace",
+                 "run_sensitivity_analysis"}
 
 
 def _client(tmp_path):
@@ -118,3 +119,58 @@ def test_invalid_inputs_are_rejected(tmp_path):
     assert all(errs.values()) and len(errs) == 13
     assert "unknown experiment_id" in errs["unknown_exp"] and "unknown scenario_id" in errs["unknown_scn"]
     assert "retry_limit" in errs["retry_limit"] or "less than or equal" in errs["retry_limit"]
+
+
+def test_sensitivity_tool_end_to_end_reproducible_persisted_and_validated(tmp_path):
+    pols = [{"base": "immediate_retry"}, {"base": "exponential_backoff"}, {"base": "intelligent_recovery"}]
+
+    async def go():
+        async with _client(tmp_path) as c:
+            eid = (await c.call_tool("create_payment_experiment", {"name": "sens", "constraints": {
+                "max_retries": None, "max_recovery_window_minutes": None, "forbid_terminal_retries": False,
+                "require_idempotency": False, "require_buyer_approval": False}})).structured_content["experiment_id"]
+            sid = (await c.call_tool("generate_payment_scenarios", {"experiment_id": eid, "scenarios": [
+                {"preset": "baseline", "n_transactions": 1000}]})).structured_content["scenarios"][0]["scenario_id"]
+            base = {"experiment_id": eid, "scenario_id": sid, "policies": pols, "n_trials": 3, "master_seed": 4,
+                    "sweep_n_transactions": 800, "parameters": [{"parameter": "latency_weight", "values": [0.0, 20.0]},
+                                                                {"parameter": "network_instability", "values": [3.0]}]}
+            a = (await c.call_tool("run_sensitivity_analysis", base)).structured_content
+            b = (await c.call_tool("run_sensitivity_analysis", base)).structured_content
+            everything = (await c.call_tool("run_sensitivity_analysis", {**base, "parameters": None, "n_trials": 2, "sweep_n_transactions": 500})).structured_content
+            stored = (await c.call_tool("get_payment_experiment_results", {"experiment_id": eid})).structured_content
+            errs = {}
+            for label, args in {
+                "unknown_param": {**base, "parameters": [{"parameter": "bogus"}]},
+                "bad_value": {**base, "parameters": [{"parameter": "network_instability", "values": [-1.0]}]},
+                "one_policy": {**base, "policies": pols[:1]},
+                "dup_names": {**base, "policies": [pols[0], pols[0]]},
+                "budget_cap": {**base, "max_work_units": 100},
+                "too_few_trials": {**base, "n_trials": 1},
+                "unknown_exp": {**base, "experiment_id": "nope"},
+            }.items():
+                try:
+                    await c.call_tool("run_sensitivity_analysis", args)
+                    errs[label] = None
+                except Exception as e:  # noqa: BLE001
+                    errs[label] = str(e)
+            cmp_cap = None
+            try:
+                await c.call_tool("compare_recovery_policies", {"experiment_id": eid, "scenario_id": sid, "policies": pols[:2], "max_work_units": 10})
+            except Exception as e:  # noqa: BLE001
+                cmp_cap = str(e)
+            return a, b, everything, stored, errs, cmp_cap
+
+    a, b, everything, stored, errs, cmp_cap = _run(go())
+    # deterministic and structured
+    assert a["points"] == b["points"] and a["parameter_summary"] == b["parameter_summary"]
+    assert len(a["points"]) == 3 and {p["parameter"] for p in a["points"]} == {"latency_weight", "network_instability"}
+    assert a["provenance"] == "SIMULATED" and a["assumptions"]["parameters"]["network_instability"]["baseline"] == 1.0
+    assert a["baseline"]["winner"] == "intelligent_recovery" and a["work_units"] == 800 * 3 * 3 * 2  # baseline + 1 re-simulated point (latency points are re-scored, not re-simulated)
+    lat = {p["value"]: p for p in a["points"] if p["parameter"] == "latency_weight"}
+    assert lat[20.0]["winner"] == "immediate_retry" and lat[20.0]["winner_changed"] is True
+    assert a["robustness"]["flip_conditions"][0]["parameter"] == "latency_weight"
+    assert len(everything["points"]) == 28 and everything["most_sensitive_parameters"][0] == "latency_weight"
+    assert [r["kind"] for r in stored["runs"] if r["kind"] == "sensitivity"] == ["sensitivity"] * 3
+    # all invalid requests rejected, with usable messages
+    assert all(errs.values()), errs
+    assert "budget exceeded" in errs["budget_cap"] and "budget exceeded" in cmp_cap and "unknown experiment_id" in errs["unknown_exp"]

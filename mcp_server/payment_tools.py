@@ -6,6 +6,7 @@ Register on a FastMCP instance with register_payment_tools(mcp).
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -16,12 +17,14 @@ from engine.payments.models import (ASSUMPTION_LABEL, MODEL_VERSION, SIM_LABEL, 
 from engine.payments.recovery_policy import (BASELINES, AlternateFundingAction, TerminalFailureHandling,
                                              resolve_policy)
 from engine.payments.scenarios import PRESETS, build_scenario
+from engine.payments.sensitivity import PARAMETERS as SENS_PARAMS, estimate_work_units, run_sensitivity, sweep_plan
 from engine.payments.simulator import (PaymentMCResult, compare_policies_monte_carlo, trace_transaction,
                                        trial_seeds)
 from engine.payments.transaction_generator import MAX_TRANSACTIONS, prepare_trial
 from storage import payment_experiments as store
 
 MAX_TRIALS = 50
+MAX_SENSITIVITY_WORK_UNITS = 15_000_000
 MAX_WORK_UNITS = 6_000_000  # transactions x trials x policies per call (keeps calls to ~tens of seconds)
 PROVENANCE = {"provenance": "SIMULATED", "label": SIM_LABEL, "assumptions": ASSUMPTION_LABEL,
               "model_version": MODEL_VERSION,
@@ -58,6 +61,15 @@ class ScenarioRequest(BaseModel):
     preset: PresetName = "baseline"
     n_transactions: int = Field(default=10_000, ge=100, le=MAX_TRANSACTIONS)
     name: Optional[str] = None
+
+
+SweepName = Literal[tuple(SENS_PARAMS)]  # type: ignore[valid-type]
+
+
+class SweepSpec(BaseModel):
+    parameter: SweepName
+    values: Optional[list[float]] = Field(default=None, min_length=1, max_length=8,
+                                          description="Values to test; omit to use the default exploration grid.")
 
 
 class PolicySpec(BaseModel):
@@ -116,10 +128,15 @@ def _load(conn, experiment_id: str, scenario_id: str):
     return exp, scenario, ObjectiveWeights(**cfg["objective"]), HardConstraints(**cfg["constraints"])
 
 
-def _check_budget(n_tx: int, n_trials: int, n_policies: int) -> None:
-    if n_tx * n_trials * n_policies > MAX_WORK_UNITS:
+def _check_budget(n_tx: int, n_trials: int, n_policies: int, cap: Optional[int] = None) -> int:
+    """Enforce the per-call work cap (and an optional caller-supplied tighter cap); returns the work units."""
+    units = n_tx * n_trials * n_policies
+    if units > MAX_WORK_UNITS:
         raise ValueError(f"workload too large ({n_tx} x {n_trials} trials x {n_policies} policies > {MAX_WORK_UNITS}); "
                          "reduce n_trials or n_transactions")
+    if cap is not None and units > cap:
+        raise ValueError(f"simulation budget exceeded: this call needs {units} work units but only {cap} remain")
+    return units
 
 
 def _summary(r: PaymentMCResult) -> dict:
@@ -186,18 +203,20 @@ def register_payment_tools(mcp) -> None:
     @mcp.tool
     def run_payment_simulation(experiment_id: str, scenario_id: str, policy: PolicySpec,
                                n_trials: int = Field(default=10, ge=1, le=MAX_TRIALS),
-                               master_seed: int = Field(default=0, ge=0)) -> dict[str, Any]:
+                               master_seed: int = Field(default=0, ge=0),
+                               max_work_units: Optional[int] = Field(default=None, ge=1)) -> dict[str, Any]:
         """Run a seeded Monte Carlo of ONE recovery policy on a scenario and return metrics with 95% CIs,
         plus its objective score and hard-constraint feasibility. Reproducible for the same inputs."""
         conn = store.connect()
         try:
             _, scenario, w, hc = _load(conn, experiment_id, scenario_id)
             pol = _policy(policy)
-            _check_budget(scenario.workload.n_transactions, n_trials, 1)
+            units = _check_budget(scenario.workload.n_transactions, n_trials, 1, max_work_units)
             res = compare_policies_monte_carlo(scenario, [pol], n_trials, master_seed)[pol.name]
             ev = evaluate_policy(res, scenario.rules, w, hc)
             out = {"experiment_id": experiment_id, "scenario_id": scenario_id, "policy_definition": _policy_dict(pol),
-                   "summary": _summary(res), "evaluation": ev.to_dict(), "master_seed": master_seed, **PROVENANCE}
+                   "summary": _summary(res), "evaluation": ev.to_dict(), "master_seed": master_seed,
+                   "work_units": units, **PROVENANCE}
             out["run_id"] = store.add_run(conn, experiment_id, scenario_id, "run", master_seed, n_trials,
                                           {"policy": _policy_dict(pol)}, out)
         finally:
@@ -208,7 +227,8 @@ def register_payment_tools(mcp) -> None:
     def compare_recovery_policies(experiment_id: str, scenario_id: str,
                                   policies: list[PolicySpec] = Field(min_length=2, max_length=8),
                                   n_trials: int = Field(default=10, ge=2, le=MAX_TRIALS),
-                                  master_seed: int = Field(default=0, ge=0)) -> dict[str, Any]:
+                                  master_seed: int = Field(default=0, ge=0),
+                                  max_work_units: Optional[int] = Field(default=None, ge=1)) -> dict[str, Any]:
         """Compare several recovery policies on IDENTICAL simulated workloads. Scoring and ranking are
         computed deterministically in code (hard constraints first, then weighted score); includes paired
         score differences vs the top-ranked policy. Baselines: immediate_retry, exponential_backoff,
@@ -217,7 +237,7 @@ def register_payment_tools(mcp) -> None:
         try:
             _, scenario, w, hc = _load(conn, experiment_id, scenario_id)
             pols = [_policy(p) for p in policies]
-            _check_budget(scenario.workload.n_transactions, n_trials, len(pols))
+            units = _check_budget(scenario.workload.n_transactions, n_trials, len(pols), max_work_units)
             results = compare_policies_monte_carlo(scenario, pols, n_trials, master_seed)
             evals = {n: evaluate_policy(r, scenario.rules, w, hc) for n, r in results.items()}
             ranked = rank_policies(list(evals.values()))
@@ -231,10 +251,52 @@ def register_payment_tools(mcp) -> None:
                     e.policy_name: paired_difference(best.trial_scores, e.trial_scores)
                     for e in ranked[1:]},
                 "policies": {n: {"definition": _policy_dict(r.policy), "summary": _summary(r)} for n, r in results.items()},
+                "work_units": units,
                 "scoring_note": "score = w_rev*R - w_cost*C - w_lat*L - w_unn*U per trial; computed in code, not by an LLM.",
                 **PROVENANCE}
             out["run_id"] = store.add_run(conn, experiment_id, scenario_id, "comparison", master_seed, n_trials,
                                           {"policies": [_policy_dict(p) for p in pols]}, out)
+        finally:
+            conn.close()
+        return out
+
+    @mcp.tool
+    def run_sensitivity_analysis(experiment_id: str, scenario_id: str,
+                                 policies: list[PolicySpec] = Field(min_length=2, max_length=6),
+                                 parameters: Optional[list[SweepSpec]] = None,
+                                 n_trials: int = Field(default=6, ge=2, le=30),
+                                 master_seed: int = Field(default=0, ge=0),
+                                 sweep_n_transactions: int = Field(default=5000, ge=500, le=50_000),
+                                 max_work_units: Optional[int] = Field(default=None, ge=1)) -> dict[str, Any]:
+        """Controlled one-at-a-time sensitivity analysis of the policy ranking. Varies (ranges are ASSUMED,
+        not empirical): network_instability, buyer_response_probability, failure_persistence, workload_size,
+        latency_weight, terminal_share, buyer_action_share. Every point uses the same seed; all policies see
+        identical workloads. Returns, per point, recovery rates with CIs, objective scores, feasibility and
+        rank; where the winner/ranking changes; which parameters the recommendation is most sensitive to;
+        and a robustness label. Omit `parameters` to sweep all with default grids."""
+        conn = store.connect()
+        try:
+            _, scenario, w, hc = _load(conn, experiment_id, scenario_id)
+            pols = [_policy(p) for p in policies]
+            names = [p.name for p in pols]
+            if len(set(names)) != len(names):
+                raise ValueError("policy names must be unique")
+            sweep_sc = replace(scenario, workload=replace(scenario.workload, n_transactions=sweep_n_transactions))
+            chosen = {sp.parameter: sp.values for sp in parameters} if parameters else None
+            plan = sweep_plan(chosen, sweep_n_transactions, w.latency)
+            units = estimate_work_units(plan, sweep_n_transactions, n_trials, len(pols))
+            if units > MAX_SENSITIVITY_WORK_UNITS:
+                raise ValueError(f"sensitivity analysis too large ({units} > {MAX_SENSITIVITY_WORK_UNITS}); "
+                                 "use fewer parameters/values/policies/trials")
+            if max_work_units is not None and units > max_work_units:
+                raise ValueError(f"simulation budget exceeded: this call needs {units} work units but only {max_work_units} remain")
+            report = run_sensitivity(sweep_sc, pols, w, hc, n_trials, master_seed, chosen)
+            # report goes AFTER PROVENANCE: its detailed `assumptions` dict must not be replaced by the label string
+            out = {"experiment_id": experiment_id, "scenario_id": scenario_id, **PROVENANCE, **report,
+                   "policy_definitions": {p.name: _policy_dict(p) for p in pols}}
+            out["run_id"] = store.add_run(conn, experiment_id, scenario_id, "sensitivity", master_seed, n_trials,
+                                          {"policies": [_policy_dict(p) for p in pols], "parameters": chosen,
+                                           "sweep_n_transactions": sweep_n_transactions}, out)
         finally:
             conn.close()
         return out

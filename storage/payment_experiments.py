@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS payment_sim_scenarios (
 CREATE TABLE IF NOT EXISTS payment_sim_runs (
     run_id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL REFERENCES payment_sim_experiments(experiment_id),
     scenario_id TEXT NOT NULL REFERENCES payment_sim_scenarios(scenario_id),
-    kind TEXT NOT NULL CHECK (kind IN ('run','comparison')), master_seed INTEGER NOT NULL, n_trials INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('run','comparison','sensitivity')), master_seed INTEGER NOT NULL, n_trials INTEGER NOT NULL,
     request_json TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL,
     provenance TEXT NOT NULL DEFAULT 'SIMULATED' CHECK (provenance = 'SIMULATED'));
 """
@@ -41,7 +41,28 @@ def connect(db_path: Optional[str] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
+    _migrate_kind_check(conn)
     return conn
+
+
+def _migrate_kind_check(conn) -> None:
+    """Databases created before Phase 3 have CHECK (kind IN ('run','comparison')); widen it in place."""
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE name='payment_sim_runs'").fetchone()
+    if row is None or "'sensitivity'" in row["sql"]:
+        return
+    conn.executescript("""
+        PRAGMA foreign_keys = OFF;
+        ALTER TABLE payment_sim_runs RENAME TO payment_sim_runs_old;
+        CREATE TABLE payment_sim_runs (
+            run_id TEXT PRIMARY KEY, experiment_id TEXT NOT NULL REFERENCES payment_sim_experiments(experiment_id),
+            scenario_id TEXT NOT NULL REFERENCES payment_sim_scenarios(scenario_id),
+            kind TEXT NOT NULL CHECK (kind IN ('run','comparison','sensitivity')), master_seed INTEGER NOT NULL,
+            n_trials INTEGER NOT NULL, request_json TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL,
+            provenance TEXT NOT NULL DEFAULT 'SIMULATED' CHECK (provenance = 'SIMULATED'));
+        INSERT INTO payment_sim_runs SELECT * FROM payment_sim_runs_old;
+        DROP TABLE payment_sim_runs_old;
+        PRAGMA foreign_keys = ON;
+    """)
 
 
 def _now() -> str:
