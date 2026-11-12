@@ -104,7 +104,8 @@ class FakePayPal:
         oid = f"MOCKORDER{self._n:04d}"
         pu = body["purchase_units"][0]
         order = {"id": oid, "status": "CREATED", "intent": "CAPTURE",
-                 "purchase_units": [{"reference_id": pu["reference_id"], "amount": pu["amount"]}],
+                 "purchase_units": [{"reference_id": pu["reference_id"], "amount": pu["amount"],
+                                    **({"invoice_id": pu["invoice_id"]} if "invoice_id" in pu else {})}],
                  "links": [{"rel": "approve", "href": f"https://www.sandbox.paypal.com/checkoutnow?token={oid}", "method": "GET"}]}
         self.orders[oid] = order
         if rid:

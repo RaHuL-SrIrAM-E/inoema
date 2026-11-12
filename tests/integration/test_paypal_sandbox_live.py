@@ -1,12 +1,14 @@
 """LIVE PayPal SANDBOX integration tests -- these call the real Sandbox API (no mocks).
 
-Run:  PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... python -m pytest tests/integration -m paypal_live -v -s
-Without credentials they are SKIPPED. A skip is NOT a pass: it means the real Sandbox was not exercised.
+OPT-IN ONLY. These tests create REAL Sandbox orders and attempt a REAL (expected-to-fail) capture, so having credentials
+in .env is NOT enough: you must also set INOEMA_ALLOW_LIVE_PAYPAL=1.
+Run:  INOEMA_ALLOW_LIVE_PAYPAL=1 python -m pytest tests/integration -m paypal_live -v -s
+Without the opt-in flag (or without credentials) they are SKIPPED. A skip is NOT a pass: it means the real Sandbox was not exercised.
 
 Buyer approval cannot be automated (it needs a human logging in with a Sandbox PERSONAL account). Procedure:
   1) python -m scripts.paypal_sandbox_validation run --reference REF --demo-policy     (prints the approval URL)
   2) approve in the browser
-  3) PAYPAL_APPROVED_REFERENCE=REF PAYPAL_EXPERIMENT_ID=demo-experiment python -m pytest tests/integration -m paypal_live -k approved -s
+  3) INOEMA_ALLOW_LIVE_PAYPAL=1 PAYPAL_APPROVED_REFERENCE=REF PAYPAL_EXPERIMENT_ID=demo-experiment python -m pytest tests/integration -m paypal_live -k approved -s
 """
 import os
 import uuid
@@ -16,8 +18,11 @@ import pytest
 from spikes.envutil import load_env
 
 load_env()
+OPT_IN = os.environ.get("INOEMA_ALLOW_LIVE_PAYPAL") == "1"
 HAVE = bool(os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_CLIENT_SECRET"))
-pytestmark = [pytest.mark.paypal_live, pytest.mark.skipif(not HAVE, reason="PAYPAL_CLIENT_ID/SECRET not set: the real PayPal Sandbox was NOT exercised")]
+pytestmark = [pytest.mark.paypal_live,
+              pytest.mark.skipif(not OPT_IN, reason="live PayPal tests are opt-in: set INOEMA_ALLOW_LIVE_PAYPAL=1 (they create real Sandbox orders)"),
+              pytest.mark.skipif(not HAVE, reason="PAYPAL_CLIENT_ID/SECRET not set: the real PayPal Sandbox was NOT exercised")]
 
 from paypal.client import PayPalClient  # noqa: E402
 from paypal.error_classifier import RecoveryClass, classify  # noqa: E402

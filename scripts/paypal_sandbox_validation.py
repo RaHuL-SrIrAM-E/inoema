@@ -5,6 +5,9 @@
   python -m scripts.paypal_sandbox_validation run --reference REF [--report agent_report.json | --demo-policy] [--wait 600]
   python -m scripts.paypal_sandbox_validation resume --reference REF [--wait 600]
   python -m scripts.paypal_sandbox_validation coverage | evidence --reference REF
+  python -m scripts.paypal_sandbox_validation resume-capture --order-id ID --reference REF --amount 10.00 --currency USD [--confirm-capture]
+      adopts an EXISTING order (never creates one): GETs it, verifies id/reference/invoice/amount/currency/intent, refuses unless
+      PayPal reports APPROVED, and captures only with --confirm-capture (one request, stable idempotency key, then fresh-GET verification).
 
 `run` creates a real Sandbox order and STOPS at buyer approval: open the printed URL in a browser, log in with a Sandbox
 PERSONAL (buyer) account and approve. With --wait the script polls (GET order) until it can capture. Nothing is faked:
@@ -22,6 +25,7 @@ from paypal.execution import ACTION_SUPPORT, DEMO_POLICY, ExecStatus, ExecutionP
 from paypal.models import PayPalApiError, PayPalConfig, PayPalConfigError, SandboxViolation
 from paypal.negative_testing import coverage_report, run_negative_tests
 from paypal.orders import OrdersApi
+from paypal.resume import ResumeCapture
 from paypal.persistence import SandboxStore
 from spikes.envutil import load_env
 
@@ -48,18 +52,29 @@ def show(res) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["check", "negative", "run", "resume", "coverage", "evidence", "actions"])
-    ap.add_argument("--reference"), ap.add_argument("--amount", default="25.00"), ap.add_argument("--currency", default="USD")
+    ap.add_argument("cmd", choices=["check", "negative", "run", "resume", "coverage", "evidence", "actions", "resume-capture"])
+    ap.add_argument("--reference"), ap.add_argument("--amount"), ap.add_argument("--currency")  # defaults (25.00 USD) apply to every command EXCEPT resume-capture
     ap.add_argument("--report"), ap.add_argument("--experiment-id"), ap.add_argument("--demo-policy", action="store_true")
     ap.add_argument("--wait", type=int, default=0, help="seconds to poll for buyer approval")
     ap.add_argument("--db", default=None)
+    ap.add_argument("--order-id"), ap.add_argument("--confirm-capture", action="store_true", help="resume-capture: actually capture an APPROVED order")
     args = ap.parse_args(argv)
+    if args.cmd != "resume-capture":
+        args.amount, args.currency = args.amount or "25.00", args.currency or "USD"
     load_env()
     try:
         if args.cmd == "actions":
             print(json.dumps(ACTION_SUPPORT, indent=2))
             return 0
         cfg, store, client = build(args)
+        if args.cmd == "resume-capture":
+            if not (args.order_id and args.reference and args.amount and args.currency):
+                ap.error("resume-capture requires explicit --order-id, --reference, --amount and --currency")
+            r = ResumeCapture(client, store).run(args.order_id, args.reference, args.amount, args.currency, confirm_capture=args.confirm_capture)
+            print(json.dumps({"outcome": r.outcome.value, "ok": r.ok, "execution_id": r.execution_id, "order_id": r.order_id, "order_status": r.order_status,
+                              "capture_id": r.capture_id, "capture_requested": r.capture_requested, "reason": r.reason, "problems": r.problems,
+                              "approval_url": r.approval_url, "new_api_calls": r.new_api_calls}, indent=2))
+            return 0 if r.ok else 1
         if args.cmd == "coverage":
             print(json.dumps(coverage_report(store), indent=2))
             return 0
