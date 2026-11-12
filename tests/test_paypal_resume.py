@@ -15,7 +15,7 @@ from paypal.persistence import SandboxStore
 from paypal.resume import EXPERIMENT_ID, ResumeCapture, ResumeOutcome, check_identity
 from tests.paypal_fake import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_TOKEN, FakePayPal
 
-REF = "INOEMA-MILESTONE-ORDER-001"
+REF = "DEMO-ORDER-001"
 CFG = PayPalConfig(client_id=FAKE_CLIENT_ID, client_secret=FAKE_CLIENT_SECRET)
 
 

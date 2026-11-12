@@ -6,7 +6,7 @@ INOEMA is infrastructure that lets AI agents evaluate the likely consequences of
 
 **INOEMA Payments** is the hackathon prototype (PayPal AI Hackathon). It applies the idea to **payment recovery**: when a payment fails, should the merchant retry, wait, ask the buyer to act, or stop, and how often, how long and under which safeguards? The prototype simulates those choices, lets a Gemini agent search for a better policy through MCP tools, gates the result, compiles it into a versioned execution plan, and has a verified PayPal **Sandbox** payment lifecycle (create → buyer approval → capture → independent verification).
 
-> **Honest status in one paragraph.** Everything in the simulation, the agent harness, the execution bridge, the PayPal Sandbox adapter and the dashboard is implemented and covered by an offline test suite (415 passing). A real USD 10.00 PayPal Sandbox payment was created, approved by a human, captured and verified. That payment was **resumed manually and is not driven by the Gemini policy**: the execution bridge is demonstrated on *simulated* payment states and is not yet connected to live PayPal recovery. The only genuine Gemini run on disk is **interrupted and LOW confidence**, so the bridge refuses it unless you use a clearly labelled demonstration override. All simulated numbers rest on assumed distributions and say nothing about PayPal production performance. See [Known limitations](#10-known-limitations-and-roadmap).
+> **Honest status in one paragraph.** Everything in the simulation, the agent harness, the execution bridge, the PayPal Sandbox adapter and the dashboard is implemented and covered by an offline test suite (418 passing). A real USD 10.00 PayPal Sandbox payment was created, approved by a human, captured and verified. That payment was **resumed manually and is not driven by the Gemini policy**: the execution bridge is demonstrated on *simulated* payment states and is not yet connected to live PayPal recovery. The only genuine Gemini run on disk is **interrupted and LOW confidence**, so the bridge refuses it unless you use a clearly labelled demonstration override. All simulated numbers rest on assumed distributions and say nothing about PayPal production performance. See [Known limitations](#10-known-limitations-and-roadmap).
 
 ---
 
@@ -285,6 +285,7 @@ Only variables the code actually reads are listed (all values below are placehol
 | `PAYPAL_ENV` | optional | must be `sandbox` (or unset); anything else is refused. `PAYPAL_MODE` / `PAYPAL_ENVIRONMENT` are checked the same way |
 | `PAYPAL_BASE_URL` | optional | default `https://api-m.sandbox.paypal.com`; any non-Sandbox host is refused |
 | `INOEMA_ALLOW_LIVE_PAYPAL` | optional | set to `1` to let the live PayPal tests run (see [Running](#7-running-the-project)) |
+| `INOEMA_ALLOW_LIVE_GEMINI` | optional | set to `1` to let the live Gemini tests run; a key alone is not enough (see [Running](#7-running-the-project)) |
 | `INOEMA_PAYMENT_DB`, `INOEMA_AGENT_DB`, `INOEMA_PAYPAL_DB`, `INOEMA_BRIDGE_DB` | optional | database paths; defaults under `data/` (`payment_simulations.db`, `payment_agent_runs.db`, `paypal_sandbox.db`, `execution_bridge.db`) |
 | `INOEMA_DEFAULT_WORKSPACE` | optional | `payments` (default) or `simulation` to open the legacy app |
 | `INOEMA_DEMO_MODE` | optional | `1` starts the dashboard in Demonstration mode |
@@ -335,13 +336,13 @@ The execution bridge refuses scripted runs: only genuine Gemini runs can be comp
 | # | Goal | Command | Effect |
 |---|---|---|---|
 | 9 | Genuine Gemini optimization | `python -m scripts.payment_agent_demo` (options: `--model`, `--max-iterations`, `--trials`, `--final-trials`, `--json-out`) | Calls the Gemini API (spends quota); runs the simulation locally through MCP; persists the run |
-| 9b | Optional live Gemini tests | `python -m pytest tests/integration -m gemini_live -v -s` | Calls Gemini |
+| 9b | Optional live Gemini tests | `INOEMA_ALLOW_LIVE_GEMINI=1 python -m pytest tests/integration -m gemini_live -v -s` | Calls Gemini (spends quota); needs `GEMINI_API_KEY` as well |
 | 10 | Optional live PayPal Sandbox tests | `INOEMA_ALLOW_LIVE_PAYPAL=1 python -m pytest tests/integration -m paypal_live -v -s` | **Creates real Sandbox orders** and attempts a real capture that PayPal is expected to reject. Evidence goes to throw-away temp databases |
 
 **Avoid accidental test orders and quota use**
 
 - The live PayPal tests run only if `INOEMA_ALLOW_LIVE_PAYPAL=1` *and* Sandbox credentials are present; credentials alone do not enable them. A test enforces this.
-- ⚠️ The live **Gemini** tests are gated only by the presence of a key. The test module loads `.env` when pytest collects it, so **a plain `python -m pytest` with `GEMINI_API_KEY` in `.env` will run the live Gemini tests and spend quota.** Use `python -m pytest -q --ignore=tests/integration` for the offline suite.
+- The live **Gemini** tests are opt-in in the same way: they run only if `INOEMA_ALLOW_LIVE_GEMINI=1` *and* a Gemini key are present. A key in `.env` or the environment alone does not enable them, and a test enforces this. A plain `python -m pytest` therefore never calls Gemini or creates Sandbox orders.
 - Unset or leave empty any credential you do not want a command to use.
 
 ## 8. PayPal Sandbox walkthrough
@@ -390,9 +391,9 @@ A suggested walkthrough (run `python -m scripts.run_payments_dashboard --demo`):
 3. **Gemini agent and MCP traces** – **Policy Optimization** (decision report: selected policy, rejected alternatives, confidence breakdown) and **Agent Execution Traces** (each Gemini turn and MCP tool call). Say plainly that the persisted run is **interrupted** and its confidence is **LOW**.
 4. **Eligibility gate and execution bridge** – **Execution Plan**: the gate refuses the interrupted, LOW-confidence run and shows which checks failed.
 5. **Demonstration override (with the warning)** – tick the override. The page shows the override warning, the compiled plan for the real selected policy, and a deterministic decision trace over nine **simulated** payment states that exercises `RETRY`, `WAIT`, `REQUIRE_BUYER_ACTION` and `STOP`. **This is a demonstration of the mechanism, not an approved policy and not an outcome PayPal produced.**
-6. **Actual PayPal Sandbox evidence** – **PayPal Sandbox**: the verified USD 10.00 execution (`INOEMA-US-DEMO-001`): its state transitions, the API calls with PayPal debug IDs, a single `CAPTURE_ORDER`, and "Capture verified: Yes". **This payment was created and captured manually with `resume-capture`, independently of the Gemini policy and of the execution bridge.** The Execution Plan page shows the same payment only as a read-only "never re-capture" check.
+6. **Actual PayPal Sandbox evidence** – **PayPal Sandbox**: the verified USD 10.00 execution: its state transitions, the API calls with PayPal debug IDs, a single `CAPTURE_ORDER`, and "Capture verified: Yes". **This payment was created and captured manually with `resume-capture`, independently of the Gemini policy and of the execution bridge.** The Execution Plan page shows the same payment only as a read-only "never re-capture" check.
 
-Offline test suite, re-run for this README: **`python -m pytest -q --ignore=tests/integration` → 415 passed.** (Including the optional live tests, which are skipped without credentials and opt-in, a default `pytest` run reports 415 passed and 7 skipped. A skip is not a pass: the live Gemini and live PayPal paths are exercised only when you deliberately run them.) The mocked PayPal in the tests encodes our assumptions and is not evidence of Sandbox behaviour; the real evidence is the persisted Sandbox run.
+Offline test suite, re-run for this README: **`python -m pytest -q --ignore=tests/integration` → 418 passed.** (Including the optional live tests, which are skipped without credentials and opt-in, a default `pytest` run reports 418 passed and 7 skipped. A skip is not a pass: the live Gemini and live PayPal paths are exercised only when you deliberately run them.) The mocked PayPal in the tests encodes our assumptions and is not evidence of Sandbox behaviour; the real evidence is the persisted Sandbox run.
 
 ## 10. Known limitations and roadmap
 
@@ -428,19 +429,7 @@ Offline test suite, re-run for this README: **`python -m pytest -q --ignore=test
 - **Test hygiene**: the live PayPal tests are opt-in and write evidence to temp databases; the offline tests use mocks and temp databases and make no network calls.
 - **Scripted and mocked components are always labelled** and never counted as genuine Gemini or PayPal evidence.
 
-**`.gitignore` review.** Currently ignored: `.venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `*.db`, `.env`, `*.jsonl`. Recommended additions (not applied automatically):
-
-```gitignore
-.env.*
-!.env.example
-*.db-journal
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite3
-.streamlit/secrets.toml
-.DS_Store
-```
+**`.gitignore`.** Ignored: `.env` and every `.env.*` variant (except the tracked template `.env.example`), `.streamlit/secrets.toml`, all `*.db` files plus SQLite sidecars (`*.db-wal`, `*.db-shm`, `*.db-journal`, `*.sqlite*`), Python caches and virtual environments, `*.jsonl`, `*.log` and `.DS_Store`. Documentation, source and configuration such as `.streamlit/config.toml` are deliberately **not** ignored.
 
 `docs/screenshots/` is tracked; those screenshots were generated before any real Sandbox activity existed, but re-check any new screenshots for order IDs or buyer details before committing.
 

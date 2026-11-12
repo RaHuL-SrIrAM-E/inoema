@@ -1,7 +1,8 @@
 """LIVE Gemini integration tests -- these call the real Gemini API and spend quota.
 
-Run explicitly:   GEMINI_API_KEY=... python -m pytest tests/integration -m gemini_live -v -s
-Without a key they are SKIPPED (a skip is NOT a pass: it means the live API was not exercised).
+OPT-IN ONLY: having a key (in the environment or .env) is NOT enough; you must also set INOEMA_ALLOW_LIVE_GEMINI=1.
+Run explicitly:   INOEMA_ALLOW_LIVE_GEMINI=1 python -m pytest tests/integration -m gemini_live -v -s
+Without the opt-in flag (or without a key) they are SKIPPED (a skip is NOT a pass: it means the live API was not exercised).
 Evidence of a genuine run: provider == 'GEMINI_API', at least one function call chosen by the model and
 executed through MCP, request ids / traces persisted in the agent DB.
 """
@@ -14,7 +15,10 @@ from spikes.envutil import load_env
 
 load_env()
 KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-pytestmark = [pytest.mark.gemini_live, pytest.mark.skipif(not KEY, reason="GEMINI_API_KEY not set: live Gemini API NOT exercised")]
+OPT_IN = os.environ.get("INOEMA_ALLOW_LIVE_GEMINI") == "1"
+pytestmark = [pytest.mark.gemini_live,
+              pytest.mark.skipif(not OPT_IN, reason="live Gemini tests are opt-in: set INOEMA_ALLOW_LIVE_GEMINI=1 (they call the real API and spend quota)"),
+              pytest.mark.skipif(not KEY, reason="GEMINI_API_KEY not set: live Gemini API NOT exercised")]
 
 from google.genai import types  # noqa: E402
 

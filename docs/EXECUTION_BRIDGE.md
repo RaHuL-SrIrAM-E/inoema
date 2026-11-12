@@ -34,7 +34,7 @@ python -m scripts.run_payments_dashboard --demo                             # th
 ```
 
 ## What is NOT done
-* Policy decisions are not wired into the live PayPal flow: the real Sandbox payment (`7P347414VM4362155`) was resumed manually and is shown only as protected from retry (`NEVER_RECAPTURE`). Nothing was retried or captured.
+* Policy decisions are not wired into the live PayPal flow: the real Sandbox payment was resumed manually and is shown only as protected from retry (`NEVER_RECAPTURE`). Nothing was retried or captured.
 * No decisions were produced by live PayPal failures; failure events are simulated inputs we chose.
 * A complete, medium/high-confidence genuine Gemini run is still needed for an un-overridden plan.
 * Buyer notification is not sent (the plan only requires the buyer action); `terminal_failure_handling` flagging is recorded in the trace, not routed to a review queue.

@@ -5,3 +5,30 @@ __pycache__/
 *.db
 .env
 *.jsonl
+
+# --- Hardening (pre-submission) ---
+# Local environment files: keep the template tracked, ignore every real variant
+.env.*
+!.env.example
+.streamlit/secrets.toml
+# SQLite sidecar files and other local databases (private evidence may live here)
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+# Python caches and virtual environments
+*.py[cod]
+venv/
+env/
+.venv*/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# Logs and local runtime artifacts
+*.log
+.DS_Store
