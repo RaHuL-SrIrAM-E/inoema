@@ -1,17 +1,17 @@
-"""Payments workspace router: five sections, session-state navigation (so buttons can jump between sections)."""
+"""Payments workspace router: six sections, session-state navigation (so buttons can jump between sections)."""
 from __future__ import annotations
 
 import os
 
 import streamlit as st
 
-from dashboard.payments import page_experiments, page_optimization, page_overview, page_sandbox, page_traces
+from dashboard.payments import page_experiments, page_optimization, page_overview, page_sandbox, page_traces, page_execution_plan
 from dashboard.payments import data, sandbox_service, status
 from dashboard.payments.ui import render_payments_header, render_workflow_indicator
 
-SECTIONS = ["Overview", "Policy Optimization", "Experiments", "PayPal Sandbox", "Agent Execution Traces"]
+SECTIONS = ["Overview", "Policy Optimization", "Experiments", "Execution Plan", "PayPal Sandbox", "Agent Execution Traces"]
 PAGES = {"Overview": page_overview.render, "Policy Optimization": page_optimization.render, "Experiments": page_experiments.render,
-         "PayPal Sandbox": page_sandbox.render, "Agent Execution Traces": page_traces.render}
+         "Execution Plan": page_execution_plan.render, "PayPal Sandbox": page_sandbox.render, "Agent Execution Traces": page_traces.render}
 
 
 def render_payments_workspace() -> None:

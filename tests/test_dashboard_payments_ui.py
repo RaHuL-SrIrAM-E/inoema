@@ -17,7 +17,8 @@ from tests.dash_fixtures import FAKE_GEMINI_KEY, build_world
 from tests.paypal_fake import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FakePayPal
 
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "app.py")
-SECTIONS = ["Overview", "Policy Optimization", "Experiments", "PayPal Sandbox", "Agent Execution Traces"]
+SECTIONS = ["Overview", "Policy Optimization", "Experiments", "Execution Plan", "PayPal Sandbox", "Agent Execution Traces"]
+WORKFLOW_SECTIONS = [s for s in SECTIONS if s != "Execution Plan"]  # the five-step workflow indicator maps to these
 
 
 @pytest.fixture(scope="module")
@@ -99,12 +100,12 @@ def test_default_workspace_can_be_switched_back_by_env_or_query_param(world, mon
     assert at3.sidebar.radio[0].value == "INOEMA Payments"
 
 
-def test_five_sections_navigate_and_render(world):
+def test_all_sections_navigate_and_render(world):
     at = app()
     no_exception(at)
     nav = at.radio(key="payments_section")
     assert nav.options == SECTIONS
-    expected = {"Overview": "Overview", "Policy Optimization": "Policy Optimization", "Experiments": "Experiments", "PayPal Sandbox": "PayPal Sandbox",
+    expected = {"Overview": "Overview", "Policy Optimization": "Policy Optimization", "Experiments": "Experiments", "Execution Plan": "Execution Plan", "PayPal Sandbox": "PayPal Sandbox",
                 "Agent Execution Traces": "Agent Execution Traces"}
     for sec in SECTIONS:
         at.radio(key="payments_section").set_value(sec).run()
@@ -543,7 +544,7 @@ def steps_of(at) -> list[dict]:
 
 def test_workflow_indicator_is_on_every_section_and_highlights_the_current_one(world):
     keys = ["overview", "optimize", "experiments", "sandbox", "traces"]
-    for section, current in zip(SECTIONS, keys):
+    for section, current in zip(WORKFLOW_SECTIONS, keys):
         at = app(section)
         no_exception(at)
         steps = steps_of(at)
@@ -744,3 +745,55 @@ def test_dollar_signs_in_model_text_are_not_rendered_as_latex(world, tmp_path, m
     at = app("Agent Execution Traces")
     said = next(m.value for m in at.markdown if "Gemini said" in str(m.value))
     assert "\\$" in said and "$\\le" not in said.replace("\\$\\le", "")
+
+
+# ============================================================ Execution Plan section (policy execution bridge)
+def _bridge_world(tmp_path, monkeypatch, *, complete=True, confidence="HIGH"):
+    from tests.test_execution_bridge import report, write_db
+    db = tmp_path / "agent.db"
+    write_db(db, [("bridge-run-1", "GEMINI_API", "COMPLETED", "finished_by_llm" if complete else "llm_error", report(confidence={"label": confidence}), "2026-01-01")])
+    monkeypatch.setenv("INOEMA_AGENT_DB", str(db))
+
+
+def test_execution_plan_section_shows_gate_plan_and_decision_trace(world, tmp_path, monkeypatch):
+    _bridge_world(tmp_path, monkeypatch)
+    at = app("Execution Plan")
+    no_exception(at)
+    assert [x.value for x in at.subheader] == ["Execution Plan"]
+    t, h = text(at), html(at)
+    assert "bridge-r" in t and "COMPLETE" in t and "PASS" in t and not at.error
+    trace = next(d.value for d in at.dataframe if "Action" in d.value.columns and "Rationale" in d.value.columns)
+    assert {"RETRY", "WAIT", "REQUIRE_BUYER_ACTION", "STOP"} <= set(trace["Action"])  # every action is demonstrated
+    assert "SCHEDULED_RETRY" in t and "NEVER_RECAPTURE" in t
+    assert "SIMULATED" in h and "SANDBOX · ACTUAL" in h  # simulated trace and the real payment are separately labelled
+    assert "was resumed manually" in t and "STOP" in t  # the real completed Sandbox payment is only ever shown as protected from retry
+
+
+def test_execution_plan_refuses_an_interrupted_low_confidence_run_unless_overridden(world, tmp_path, monkeypatch):
+    _bridge_world(tmp_path, monkeypatch, complete=False, confidence="LOW")
+    at = app("Execution Plan")
+    no_exception(at)
+    assert at.error and "REFUSED" in at.error[0].value and "SCHEDULED_RETRY" not in text(at)  # nothing is compiled or executed
+    at.checkbox(key="ep_override").check().run()
+    no_exception(at)
+    assert not at.error and at.warning and "OVERRIDE ACTIVE" in at.warning[0].value
+    assert "INTERRUPTED" in text(at) and "OVERRIDDEN_INCOMPLETE_SOURCE" in text(at)
+
+
+def test_execution_plan_handles_missing_optimisation_result(tmp_path, monkeypatch):
+    monkeypatch.setenv("INOEMA_AGENT_DB", str(tmp_path / "none.db"))
+    monkeypatch.setenv("INOEMA_PAYMENT_DB", str(tmp_path / "s.db"))
+    monkeypatch.setenv("INOEMA_PAYPAL_DB", str(tmp_path / "p.db"))
+    at = app("Execution Plan")
+    no_exception(at)
+    assert at.info and "No optimisation result" in at.info[0].value
+
+
+def test_execution_plan_page_is_read_only(world, tmp_path, monkeypatch):
+    import hashlib
+    _bridge_world(tmp_path, monkeypatch)
+    files = [world["agent"], world["sandbox"], world["sim"]]
+    before = [hashlib.md5(open(f, "rb").read()).hexdigest() for f in files]
+    at = app("Execution Plan")
+    at.checkbox(key="ep_override").check().run()
+    assert before == [hashlib.md5(open(f, "rb").read()).hexdigest() for f in files]
